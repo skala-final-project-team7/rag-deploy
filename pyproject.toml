@@ -1,0 +1,96 @@
+[project]
+name = "lina-rag-pipeline"
+version = "0.1.0"
+description = "척척학사(LINA) Confluence 기반 RAG 챗봇 서비스의 RAG 파이프라인"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    # --- AI Agents (ai-agent 레포에서 설치 — in-repo vendoring 대체)
+    "lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@main",
+    # --- API / 런타임 ---
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",          # 답변 생성기 SSE 스트리밍
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",      # app/config.py 환경 변수 설정
+    "httpx>=0.27",
+    "tenacity>=8.3",               # LLM/외부 호출 재시도
+    # --- LLM / 오케스트레이션 ---
+    "openai>=1.30",
+    "langgraph>=0.2,<0.3",
+    "langchain>=0.3,<0.4",
+    "langchain-openai>=0.2,<0.3",
+    "tiktoken>=0.7",               # GPT-4o 토큰 카운팅 (cl100k_base)
+    # --- 데이터 저장소 클라이언트 ---
+    "qdrant-client>=1.9",          # Multi-Pool Vector Store
+    "pymongo>=4.7",                # rag_mock.* / ingestion_jobs / embedding_cache
+    "sqlalchemy>=2.0",             # space_doc_type_cache (MySQL)
+    "pymysql>=1.1",
+    # --- 운영 모니터링 (feature12, PDF 0518_RAG.pdf #4) ---
+    # /metrics 엔드포인트 + HTTP 표준 메트릭(요청 수·지연 히스토그램·상태 코드별 카운터)
+    # 자동 수집. 설계서 §6.4 KPI 표의 'Query 파이프라인 entry → SSE 첫 토큰 latency'
+    # 일부를 HTTP 표준 메트릭으로 충당한다. LLM 커스텀 메트릭(환각 비율·Precision@3 등)
+    # 은 feature17(평가 세션) 으로 이관.
+    "prometheus-fastapi-instrumentator>=7.0",
+]
+
+[project.optional-dependencies]
+# 임베딩 / 재순위화 / Sparse 토크나이저 (heavy — torch 포함)
+embedding = [
+    "sentence-transformers>=3.0",  # multilingual-e5-large Dense + cross-encoder 재순위화
+    "fastembed>=0.3",              # BM25 Sparse 벡터 (대안)
+    "kiwipiepy>=0.17",             # 한국어 형태소 분석 (KoNLPy Mecab 대안, JDK 불필요)
+]
+# 데이터 수집 / 첨부 파일 텍스트 추출 / 본문 파싱
+ingestion = [
+    "atlassian-python-api>=3.41",  # Confluence REST 직접 호출 (AtlassianSourceAdapter)
+    "pymupdf>=1.24",               # PDF 텍스트 추출 (1순위)
+    "pdfplumber>=0.11",            # PDF fallback (복잡 레이아웃)
+    "python-docx>=1.1",            # Word 첨부
+    "openpyxl>=3.1",               # Excel 첨부
+    "pandas>=2.2",                 # Excel/CSV 직렬화
+    "beautifulsoup4>=4.12",        # Confluence Storage Format(HTML) 파싱
+    "lxml>=5.2",
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+# feature17b — Golden Set 자동 평가용 (ROUGE-L + BERTScore). bert-score 가
+# transformers/torch 의존성을 가져오므로 embedding extras 와 함께 설치 권장.
+# 사용법: pip install -e ".[evaluation]"
+evaluation = [
+    "evaluate>=0.4.0",
+    "rouge-score>=0.1.2",
+    "bert-score>=0.3.13",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = [
+    "app*",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, B: bugbear, UP: pyupgrade
+select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+exclude = [
+]

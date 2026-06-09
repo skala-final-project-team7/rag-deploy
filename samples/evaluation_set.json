@@ -1,0 +1,870 @@
+{
+  "$schema": "evaluation_set.v1",
+  "description": "RAG Pipeline Evaluation Set — 설계서 §6.2 정합. 시드 10건 (feature17a, 사람이 만든 base) + Claude bootstrap 40건 (feature17b, samples 페이지 기반 자동 라벨링). 사용자 검수 후 Golden Set 추출 자료로 활용.",
+  "design_constraints": {
+    "design_ref": "docs/rag-pipeline-design.md §6.2 / §6.3",
+    "target_size": 50,
+    "intent_ratio_target": {
+      "장애대응": 0.35,
+      "운영가이드": 0.3,
+      "정책절차": 0.2,
+      "이력조회": 0.15
+    },
+    "attachment_focused_min": 8,
+    "notes": [
+      "expected_page_ids 는 정답 청크가 소속된 PageObject 의 page_id 목록.",
+      "expected_chunk_ids 는 정답 청크의 SHA1(page_id+chunk_index+attachment_id) 식별자 — `scripts/backfill_chunk_ids.py` 가 운영 Qdrant scroll 로 자동 채움.",
+      "expected_answer_excerpt 는 우수 답변의 핵심 문장 1~2개 — ROUGE-L / BERTScore 자동 평가 입력.",
+      "is_attachment_focused=true 인 항목은 첨부 파일에서 정답이 나와야 하는 항목 (설계서 v0.2.2 신설).",
+      "label_source=human: 사람이 직접 라벨링 / label_source=claude_bootstrap: Claude 가 samples 페이지 기반 자동 라벨링. claude_bootstrap 항목은 사용자 검수 후 LLM-as-Judge 순환 문제 회피를 위해 신중히 사용 — bootstrap 회귀 평가 용도까지가 권장 범위, 최종 Golden Set 채택 시 사용자 피드백 추가 검증 필요.",
+      "is_answerable=false 인 항목은 코퍼스에 정답 근거가 없어 시스템이 거부하는 것이 올바른 동작인 항목 (bootstrap 라벨의 expected_answer_excerpt/page 는 생성됐으나 정적 확인 결과 코퍼스에 미수록). run_evaluation.py 가 환각(NOT_SUPPORTED) 집계에서 분리한다 (feature17c-13). 미지정 시 기본 true."
+    ]
+  },
+  "items": [
+    {
+      "id": "EVAL-001",
+      "label_source": "human",
+      "intent": "장애대응",
+      "query": "EKS Worker Node가 NotReady 상태가 되었을 때 어떻게 대응해야 하나요?",
+      "expected_page_ids": [
+        "100019",
+        "100001"
+      ],
+      "expected_chunk_ids": [
+        "05205d7811231c2a20e455c99f3426337a46592b",
+        "226743c15f364dff2126cf3719189d1761dc8f2f",
+        "98018afff134513aa37444a928103ee4033a0594",
+        "b3afab22d43046a3bbce60cb6d58bbd9ec87f41d",
+        "b5274ceb50af3b96e75c74c164c65033dca7b7a9",
+        "c6b0dc02a0365e1426591c7cafeafac80846fa24",
+        "fdf17ec550fb59b907d5fa8c7c67e8483aad1ee5"
+      ],
+      "expected_answer_excerpt": "kubelet 로그 확인 → Security Group 인바운드 규칙 (443, 10250) 확인 → IAM Role EKSNodeRole 정책 점검 순서로 진단합니다.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-002",
+      "label_source": "human",
+      "intent": "장애대응",
+      "query": "Redis 메모리 초과로 인한 세션 유실 사고는 어떻게 처리했나요?",
+      "expected_page_ids": [
+        "100020"
+      ],
+      "expected_chunk_ids": [
+        "01a1fb81c838e6fc59abb011bca2a1fd720f86d6",
+        "2fa68d95a75351e9840955e4023a076d6a51e62c",
+        "a857561bf058693a04ced5699b03c95d04f9bc3e",
+        "bfb7da24227ed0d283bc925f4059e82c785fc93b",
+        "f91e40539c0d31798cd5a6745c2e65fdfb6d7502"
+      ],
+      "expected_answer_excerpt": "ElastiCache Redis 메모리 사용량 100% 도달 → 세션 키 evict → maxmemory-policy 점검 + 인스턴스 스케일업.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-003",
+      "label_source": "human",
+      "intent": "장애대응",
+      "query": "Lambda Cold Start 로 인한 API 타임아웃 사례는?",
+      "expected_page_ids": [
+        "100022"
+      ],
+      "expected_chunk_ids": [
+        "2a0c73f874b8764a3d1c7ec38e673119a87ed489",
+        "7ee4ff155b5f51ce2a97eefcbe764790b7a3ba54",
+        "b8a49aade13a06816e804f9eb203269a98e13baa",
+        "fd21391ba8b3d1c75983e2a20994a0bd7adb9564",
+        "ffcb26fd5d1b528fb7c1ee42dfedcb2e391bfa5c"
+      ],
+      "expected_answer_excerpt": "Lambda 동시 호출 급증으로 새 컨테이너 초기화 지연 → Provisioned Concurrency 적용 후 P95 회복.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-004",
+      "label_source": "human",
+      "intent": "장애대응",
+      "query": "DynamoDB 쓰로틀링이 발생했을 때 원인과 해결 과정은?",
+      "expected_page_ids": [
+        "100023"
+      ],
+      "expected_chunk_ids": [
+        "8692252217b05cec3370b07038c4518b27194c0a",
+        "9a7509bb5cf31b4fb8296806c454abe879b8b0f3",
+        "a250ec970d90bcce9091b5e8208641ec6f152259",
+        "c3a930af6c6fca2c575de5e4a075528082894a0c",
+        "cb3a5e86de98257635985d74a4fa629ab402c056"
+      ],
+      "expected_answer_excerpt": "ProvisionedThroughputExceededException 발생 → On-Demand 전환 또는 Auto Scaling 임계 조정.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-005",
+      "label_source": "human",
+      "intent": "운영가이드",
+      "query": "EKS 에 Karpenter 를 도입할 때 어떤 단계를 거쳐야 하나요?",
+      "expected_page_ids": [
+        "100004"
+      ],
+      "expected_chunk_ids": [
+        "28fd249a3a5205bbc7ba569020334a61425c56c7",
+        "a219030b3855a82c6453c06adfa570b6a4a39b47"
+      ],
+      "expected_answer_excerpt": "IAM Role 생성 → Helm chart 설치 → Provisioner CRD 정의 → 노드그룹 마이그레이션.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-006",
+      "label_source": "human",
+      "intent": "운영가이드",
+      "query": "RDS PostgreSQL 운영 시 백업과 복구 절차는?",
+      "expected_page_ids": [
+        "100028"
+      ],
+      "expected_chunk_ids": [
+        "74549acf68e601fa86190eee8c636e7b83381fab",
+        "943fa09c774c129ffa80cbc8c303d7788d8743f2"
+      ],
+      "expected_answer_excerpt": "자동 스냅샷 + 수동 스냅샷 정책 + PITR (Point-in-Time Recovery) 활용.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-007",
+      "label_source": "human",
+      "intent": "운영가이드",
+      "query": "ArgoCD 로 GitOps 배포를 운영할 때 주요 명령은 무엇인가요?",
+      "expected_page_ids": [
+        "100011"
+      ],
+      "expected_chunk_ids": [
+        "10ad90ecf1efd722a8e09157a610945062e5f187",
+        "8d7e341be749ae33639efa0d4900912da70f7dd4"
+      ],
+      "expected_answer_excerpt": "argocd app sync / argocd app rollback / argocd app diff 가 주요 운영 명령입니다.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-008",
+      "label_source": "human",
+      "intent": "정책절차",
+      "query": "IAM 정책 변경 절차는 어떻게 진행되어야 하나요?",
+      "expected_page_ids": [
+        "100025"
+      ],
+      "expected_chunk_ids": [
+        "77f85b0f556963653282c37e47f26bcf3a24a6a0",
+        "7a9e8b0f822b4b7f8e2961a56e23915a7b441f1b",
+        "ea6d3c2e3420638f9bae1f179303b5fdd3101146"
+      ],
+      "expected_answer_excerpt": "IAM 정책 변경은 PR 기반 검토 + 최소 권한 원칙 + 변경 이력 CloudTrail 로 기록.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-009",
+      "label_source": "human",
+      "intent": "정책절차",
+      "query": "S3 버킷 네이밍 컨벤션과 운영 정책은?",
+      "expected_page_ids": [
+        "100027"
+      ],
+      "expected_chunk_ids": [
+        "716a7abf8938a3d69d77c73bafdcc158769bb58c",
+        "b0adb216a1f33f73fd5482c155a794ea1aa1a8ee"
+      ],
+      "expected_answer_excerpt": "<환경>-<서비스>-<용도> 네이밍 + 버전 관리 활성화 + Public Access Block 강제.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-010",
+      "label_source": "human",
+      "intent": "이력조회",
+      "query": "2026년 3월 AWS 월간 비용 리포트의 주요 절감 액션 아이템은?",
+      "expected_page_ids": [
+        "100014"
+      ],
+      "expected_chunk_ids": [
+        "483a4e4ea82da045744c0d6c27e9b11f353d9fed",
+        "6104ea84630b78062d0e59823662d3faddeaf227"
+      ],
+      "expected_answer_excerpt": "NAT Gateway 트래픽 분석 후 S3/DynamoDB VPC Endpoint 도입 (월 $500 절감), Dev 환경 야간/주말 자동 셧다운 ($800 절감), 미사용 EBS 볼륨 정리.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-011",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "S3 버킷에 접근할 때 권한 오류가 발생했던 사고 사례는 어떻게 해결했나요?",
+      "expected_page_ids": [
+        "100017"
+      ],
+      "expected_chunk_ids": [
+        "103085f51d14f761fb370d9412c4391e5e4915f7",
+        "2d22431b722b806740ecc07476206242d03ce27c",
+        "639f539959842d3c86ffb85e60d22c247e121229",
+        "6c4fb1598fed4a10fab25b7575dd68fae9a8c7f0",
+        "a534b8e1155e2656236df97698f60d329d6c5464",
+        "bcbb4f0a23991364ee7c9619a21e1a8402f43ddb",
+        "ccf2bb708b18aa853ae596e5716b7adcd6e8b19b"
+      ],
+      "expected_answer_excerpt": "데이터 파이프라인의 S3 버킷 접근 권한이 누락되어 P1 장애 발생. IAM Role 정책에 s3:GetObject / ListBucket 권한 추가 후 복구.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-012",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "RDS Connection Pool 고갈로 인한 주문 서비스 장애는 어떻게 처리했나요?",
+      "expected_page_ids": [
+        "100018"
+      ],
+      "expected_chunk_ids": [
+        "23a5572a0255f634ede21bf63bd81aea95e23f94",
+        "5ed95c430542768f6bc5666ea33561f82cfcc347",
+        "8661e4d811e11e085e1807b64c3322497465024a",
+        "b6d53f5583f8560480503af03cf3128fa6500868",
+        "ff7be40cb217a149764a5be0c4e309d1f79c2cd0"
+      ],
+      "expected_answer_excerpt": "Connection pool exhausted 에러 발생 → max_connections 증대 + 애플리케이션 측 connection leak 패치.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-013",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "CloudFront 캐시 무효화가 실패했을 때 어떻게 대응했나요?",
+      "expected_page_ids": [
+        "100021"
+      ],
+      "expected_chunk_ids": [
+        "010f0dcb6bd2549bd10b3af7e5626879e5b95528",
+        "218c2de7056c4da9f24d39635a7cbcf7b7e7bbc9",
+        "7844142af4126ed1247603d14c7c496554c4f823",
+        "d6599e8c83759a46188433ca1266cccd56a929e2",
+        "df0d0145456a5545d061efe761cfe2a52687972c"
+      ],
+      "expected_answer_excerpt": "프론트엔드 배포 후 이전 JS/CSS 파일이 캐시에서 계속 서빙. CI/CD 의 CloudFront invalidation 호출 보강 + 강제 무효화 수행.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-014",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "Route53 DNS 전파 지연 문제는 어떻게 해결했나요?",
+      "expected_page_ids": [
+        "100024"
+      ],
+      "expected_chunk_ids": [
+        "25c2cbe5419fb76f464121c4e087a9eb3071f67f",
+        "57ca3e04aaf8ae83d53c44864f18f735ec8b9a2a",
+        "a024613a79bff7059422ba4b05128d240a08b3fa",
+        "e3bcc2e687f0d66a6c869c5cf555e55a2b2a3711"
+      ],
+      "expected_answer_excerpt": "Terraform 으로 Route53 레코드 업데이트 시 기존 CNAME 캐시로 NXDOMAIN. TTL 단축 + 강제 propagation 대기.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-015",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "EKS Pod 가 ImagePullBackOff 상태로 떨어졌을 때 어떻게 진단하나요?",
+      "expected_page_ids": [
+        "100033"
+      ],
+      "expected_chunk_ids": [
+        "17a481451deac792702fe1772fdb6c66f976cc59",
+        "4b8b0039f3bb0919db5520afee33c6ecea37b01b",
+        "7e8e73474a6ce6ad5eb9fc37b8aa50f05440a2b8",
+        "861a280a7fb77bb665ad730dc168b2b603bf7b5a"
+      ],
+      "expected_answer_excerpt": "ECR 인증 토큰 만료 (12시간) 또는 노드 IAM Role 의 ECR 권한 부족 점검. kubectl describe pod 의 Events 에서 unauthorized 메시지 확인.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-016",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "terraform apply 시 State Lock 에러가 발생하면 어떻게 풀어야 하나요?",
+      "expected_page_ids": [
+        "100034"
+      ],
+      "expected_chunk_ids": [
+        "57281a55284941d89b6bd9a9b6cabd2ca224b692",
+        "9c4f8023f5149191a7f29a08758a6d92c6291331",
+        "acff792bf8317677405722282d249a0a34a59eba",
+        "c9803d3792c8b61d54d013dc702b035c26784d01"
+      ],
+      "expected_answer_excerpt": "DynamoDB 의 잔존 Lock 확인 → 다른 사용자가 실행 중이 아닌 것을 확인한 뒤 terraform force-unlock <LOCK_ID> 실행.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-017",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "FortiClient VPN 접속이 시간 초과로 실패할 때 어떻게 점검하나요?",
+      "expected_page_ids": [
+        "100035"
+      ],
+      "expected_chunk_ids": [
+        "505bc4000b981765f5f883131f9d0dc90a3d448b",
+        "6e7eac52e21b9a7922a3504882050d9272298bf4",
+        "6f08600f112e3b4b9e05fcf23d55267683518c61"
+      ],
+      "expected_answer_excerpt": "사내 네트워크 연결 확인 → FortiClient 7.0.x 이상 버전 업데이트 → 방화벽/백신이 UDP 4433 포트를 차단하는지 점검.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-018",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "GitHub Actions 빌드에서 npm install ERESOLVE 에러가 났을 때 해결 방법은?",
+      "expected_page_ids": [
+        "100036"
+      ],
+      "expected_chunk_ids": [
+        "0d3ece3c38a9a8f1bbdf096ff17841e298186eee",
+        "2aaa17efe09dd764022e33921b9b1ed0acbb58eb",
+        "5abcdb5b76bf76bcbdcb4aca0754f1c5e241c7bd",
+        "d2f1735c2a31ff6e75ef2ca51ce76494de9fc924"
+      ],
+      "expected_answer_excerpt": "package-lock.json 과 package.json 의 의존성 버전 불일치 → npm install --legacy-peer-deps 또는 lock 파일 재생성.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-019",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "EKS 운영 상세 매뉴얼 v2.3 첨부에서 노드 OOMKill 발생 시 권장 조치는?",
+      "expected_page_ids": [
+        "100001"
+      ],
+      "expected_chunk_ids": [
+        "226743c15f364dff2126cf3719189d1761dc8f2f",
+        "c6b0dc02a0365e1426591c7cafeafac80846fa24"
+      ],
+      "expected_answer_excerpt": "Pod memory limit 점검 → Right-Sizing 가이드 (P90 + 30% buffer) 적용 → kubelet eviction policy 확인.",
+      "is_attachment_focused": true,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-020",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "EKS Worker Node 의 kubelet 이 응답하지 않을 때 어디부터 살펴봐야 하나요?",
+      "expected_page_ids": [
+        "100019",
+        "100001"
+      ],
+      "expected_chunk_ids": [
+        "05205d7811231c2a20e455c99f3426337a46592b",
+        "226743c15f364dff2126cf3719189d1761dc8f2f",
+        "98018afff134513aa37444a928103ee4033a0594",
+        "b3afab22d43046a3bbce60cb6d58bbd9ec87f41d",
+        "b5274ceb50af3b96e75c74c164c65033dca7b7a9",
+        "c6b0dc02a0365e1426591c7cafeafac80846fa24",
+        "fdf17ec550fb59b907d5fa8c7c67e8483aad1ee5"
+      ],
+      "expected_answer_excerpt": "journalctl -u kubelet -f 로 실시간 로그 확인 → 노드 SSH 접속 후 디스크/메모리 사용량 점검 → 필요 시 노드 강제 재부팅.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-021",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "EKS 운영 상세 매뉴얼 첨부에 따르면 노드 디스크 압박 (DiskPressure) 발생 시 권장 절차는?",
+      "expected_page_ids": [
+        "100001"
+      ],
+      "expected_chunk_ids": [
+        "226743c15f364dff2126cf3719189d1761dc8f2f",
+        "c6b0dc02a0365e1426591c7cafeafac80846fa24"
+      ],
+      "expected_answer_excerpt": "ephemeral-storage 사용량 확인 → 컨테이너 로그 로테이션 / 미사용 이미지 prune → 노드 EBS 볼륨 확장.",
+      "is_attachment_focused": true,
+      "is_answerable": false
+    },
+    {
+      "id": "EVAL-022",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "Redis 클러스터의 Primary failover 가 발생했을 때 어떻게 검증하나요?",
+      "expected_page_ids": [
+        "100020",
+        "100029"
+      ],
+      "expected_chunk_ids": [
+        "01a1fb81c838e6fc59abb011bca2a1fd720f86d6",
+        "2fa68d95a75351e9840955e4023a076d6a51e62c",
+        "a857561bf058693a04ced5699b03c95d04f9bc3e",
+        "bfb7da24227ed0d283bc925f4059e82c785fc93b",
+        "d675f4ad6b92ce82aa3ac70233c1303b810b3474",
+        "f91e40539c0d31798cd5a6745c2e65fdfb6d7502"
+      ],
+      "expected_answer_excerpt": "Replica 가 새 Primary 로 승격됐는지 ElastiCache 콘솔 + redis-cli INFO replication 으로 확인. 애플리케이션의 read/write endpoint 연결 재확인.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-023",
+      "label_source": "claude_bootstrap",
+      "intent": "장애대응",
+      "query": "Lambda 가 cold start 로 P99 latency 가 급증할 때 빠르게 완화하는 방법은?",
+      "expected_page_ids": [
+        "100022"
+      ],
+      "expected_chunk_ids": [
+        "2a0c73f874b8764a3d1c7ec38e673119a87ed489",
+        "7ee4ff155b5f51ce2a97eefcbe764790b7a3ba54",
+        "b8a49aade13a06816e804f9eb203269a98e13baa",
+        "fd21391ba8b3d1c75983e2a20994a0bd7adb9564",
+        "ffcb26fd5d1b528fb7c1ee42dfedcb2e391bfa5c"
+      ],
+      "expected_answer_excerpt": "Provisioned Concurrency 즉시 적용 + 메모리 할당 상향 → 컨테이너 초기화 시간 단축.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-024",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "Datadog 모니터링 메트릭 정의서 첨부에서 EKS 클러스터 핵심 메트릭은 무엇이 정의되어 있나요?",
+      "expected_page_ids": [
+        "100009"
+      ],
+      "expected_chunk_ids": [
+        "4593174803ba274532018dc26d3dd5126f98f4ff",
+        "bd283d42b0d5bc5ec4621ae4d7ccd1b3dcf1555d"
+      ],
+      "expected_answer_excerpt": "node CPU/Memory usage, Pod restart count, kubelet API latency 가 핵심 메트릭으로 정의되어 있습니다.",
+      "is_attachment_focused": true,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-025",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "Datadog 메트릭 정의서 첨부에서 알람 임계값은 어떻게 정의되어 있나요?",
+      "expected_page_ids": [
+        "100009"
+      ],
+      "expected_chunk_ids": [
+        "4593174803ba274532018dc26d3dd5126f98f4ff",
+        "bd283d42b0d5bc5ec4621ae4d7ccd1b3dcf1555d"
+      ],
+      "expected_answer_excerpt": "P1 임계: CPU > 90% 5분 연속, Memory > 85%, Pod restart > 3회/10분.",
+      "is_attachment_focused": true,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-026",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "EKS Pod 의 CPU/Memory requests 와 limits 는 어떻게 설정해야 하나요?",
+      "expected_page_ids": [
+        "100005"
+      ],
+      "expected_chunk_ids": [
+        "467c94608a5b11bfdcd36c9c4f9cec1287d0f4e7",
+        "cd54cd824a7d038e461ee2102ba14da77201e0f7"
+      ],
+      "expected_answer_excerpt": "requests 는 평소 사용량의 P90 수준, limits 는 P99 + 30% buffer 로 설정해 OOMKill 과 CPU throttling 을 방지.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-027",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "Transit Gateway 를 통한 VPC 간 라우팅은 어떻게 구성하나요?",
+      "expected_page_ids": [
+        "100008"
+      ],
+      "expected_chunk_ids": [
+        "45c81b5795ae27e9df1a0a2fd8a4eba65accdcd2",
+        "6dc0521f82451b131766c1e962da114dcbc02e83"
+      ],
+      "expected_answer_excerpt": "TGW 라우팅 테이블에 각 VPC attachment 를 등록 + 환경별 격리를 위해 별도 라우팅 테이블 분리.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-028",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "Grafana Loki 로그 검색은 어떤 쿼리 문법을 사용하나요?",
+      "expected_page_ids": [
+        "100010"
+      ],
+      "expected_chunk_ids": [
+        "1373f1791046077c6ce090ca1dbbc421c2e69db2",
+        "cbdcfeeeb08b10c7f92077b1e6b601eafa9c00e7"
+      ],
+      "expected_answer_excerpt": "LogQL 사용 — {namespace=\"production\"} |= \"ERROR\" | json | line_format \"...\". 라벨 필터 + 텍스트 필터 + JSON 파싱 조합.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-029",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "AWS Reserved Instance 와 Savings Plan 은 언제 어떻게 사용하나요?",
+      "expected_page_ids": [
+        "100016"
+      ],
+      "expected_chunk_ids": [
+        "20d3df5a8907c1b05b008010572f20eadea9a0a4"
+      ],
+      "expected_answer_excerpt": "장기 고정 워크로드는 RI (1년/3년 약정), 변동 워크로드는 Compute Savings Plan 으로 유연성 확보.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-030",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "CloudTrail 로그를 분석해 의심 활동을 찾는 방법은?",
+      "expected_page_ids": [
+        "100026"
+      ],
+      "expected_chunk_ids": [
+        "9b1335bca5f4b204275eb687b290d6c844bb0291",
+        "ff52f532b3af6a74a6327ce5c3469ea735ce8bce"
+      ],
+      "expected_answer_excerpt": "S3 의 CloudTrail 로그를 Athena 로 쿼리 → IAM 권한 변경 / 비정상 시간대 API 호출 / Root 계정 사용 이벤트 필터.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-031",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "GCP BigQuery 로 AWS 로그를 연동하려면 어떤 단계를 거쳐야 하나요?",
+      "expected_page_ids": [
+        "100030"
+      ],
+      "expected_chunk_ids": [
+        "a54101b111b8f0680b35e8eac48fe67456d8fd51",
+        "e04924406a9cb7252425a0ef09c60421a399849e"
+      ],
+      "expected_answer_excerpt": "S3 → AWS Lambda 트리거 → GCS Transfer Service → BigQuery External Table / Native Table 적재.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-032",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "Terraform 모듈을 사용할 때 버전 관리 규칙은 무엇인가요?",
+      "expected_page_ids": [
+        "100039"
+      ],
+      "expected_chunk_ids": [
+        "1a11f7e18a5eba13e7df3fbc12ef226f5b0603c0",
+        "5296e227a605b41f5629e538ee5fc522a16d8053"
+      ],
+      "expected_answer_excerpt": "Git Tag 명시 (ref=v2.1.0), Semantic Versioning, 변경 시 CHANGELOG.md 업데이트 필수.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-033",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "CI/CD 파이프라인의 표준 단계와 보안 스캔은 어떻게 구성되어 있나요?",
+      "expected_page_ids": [
+        "100041"
+      ],
+      "expected_chunk_ids": [
+        "023a8568a4dfd404ef105108f2af72302470ffde",
+        "b3fcb80e22ffdeed7e4963068cd5560bafaddab6"
+      ],
+      "expected_answer_excerpt": "체크아웃 → 의존성 캐싱 → 린트 → 단위 테스트 → Docker 빌드 (multi-stage) → Trivy 컨테이너 보안 스캔 → ECR 푸시.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-034",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "신규 입사자 온보딩 체크리스트 첨부에 따르면 1주차에 완료해야 할 항목은?",
+      "expected_page_ids": [
+        "100049"
+      ],
+      "expected_chunk_ids": [
+        "e4a65ac7bf491cfa1bdf797670ea218afca5440e"
+      ],
+      "expected_answer_excerpt": "AWS SSO 계정 발급, VPN 설정, kubectl + EKS 접근 확인, ArgoCD/Datadog 권한 신청.",
+      "is_attachment_focused": true,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-035",
+      "label_source": "claude_bootstrap",
+      "intent": "운영가이드",
+      "query": "Cloud Platform 팀 신규 입사자 체크리스트의 ArgoCD 접근 권한은 어떻게 요청하나요?",
+      "expected_page_ids": [
+        "100049"
+      ],
+      "expected_chunk_ids": [
+        "e4a65ac7bf491cfa1bdf797670ea218afca5440e"
+      ],
+      "expected_answer_excerpt": "Slack #infra-support 채널에 SSO + ArgoCD 권한 신청 메시지, Cloud Platform Admin 그룹 등록.",
+      "is_attachment_focused": true,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-036",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "EKS Namespace 의 RBAC 권한은 어떻게 부여해야 하나요?",
+      "expected_page_ids": [
+        "100006"
+      ],
+      "expected_chunk_ids": [
+        "1aed759cbd8649aa8851bc42def188bfa5a8bc84",
+        "7bafd6e7f88f9fbca4ffbd5a063a34e83fe30832"
+      ],
+      "expected_answer_excerpt": "Namespace 별 Role + RoleBinding 으로 최소 권한 부여. 프로덕션은 읽기 전용 + 변경은 ArgoCD 경유 강제.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-037",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "신규 VPC 를 생성할 때 CIDR 할당 표준은?",
+      "expected_page_ids": [
+        "100007"
+      ],
+      "expected_chunk_ids": [
+        "80dabe7ab88e248a51bc1226f21c6bbcf13ecdf9",
+        "a7bb739d4fd0cdb562dc36b0aba5be0bc782b4b2"
+      ],
+      "expected_answer_excerpt": "Production 10.0.0.0/16, Staging 10.1.0.0/16, Dev 10.2.0.0/16. 최소 3개 AZ + 환경별 독립 VPC.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-038",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "GCP 프로젝트에 IAM 권한을 부여할 때 어떤 원칙을 따라야 하나요?",
+      "expected_page_ids": [
+        "100031"
+      ],
+      "expected_chunk_ids": [
+        "9990ebf9e47fb777936f8b0d904e291034f39ad1"
+      ],
+      "expected_answer_excerpt": "최소 권한 원칙 + 커스텀 Role 사전 승인 + Service Account 키 90일 로테이션 + Terraform 으로 변경 관리.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-039",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "장애 대응 프로세스 SOP 의 P1 등급 응답 시간과 에스컬레이션은?",
+      "expected_page_ids": [
+        "100037"
+      ],
+      "expected_chunk_ids": [
+        "43be118c13b6b7c496b2e35affaa40d31a25f0a0",
+        "a15a58563fb92c67faa98f0292d62f8ac78844df",
+        "bb050b0bfc668c5f5413fb1616e5c580b4a6977f"
+      ],
+      "expected_answer_excerpt": "P1 (Critical): 응답 5분 이내, 해결 목표 1시간 이내, 즉시 팀 리드 + CTO 에스컬레이션.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-040",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "Terraform 의 버전 정책과 Provider 버전 고정 방법은?",
+      "expected_page_ids": [
+        "100038"
+      ],
+      "expected_chunk_ids": [
+        "06d69cfc94b64004d33fb10006fd039dad938f37",
+        "f3d7fb30a8c5843c8c16666b662a8ff4eb4ead32"
+      ],
+      "expected_answer_excerpt": "Terraform CLI v1.7.x LTS + AWS Provider ~> 5.40. .terraform-version 파일로 프로젝트별 버전 고정, tfenv 로 자동 전환.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-041",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "Terraform 리소스 네이밍 컨벤션은 어떻게 정의되어 있나요?",
+      "expected_page_ids": [
+        "100040"
+      ],
+      "expected_chunk_ids": [
+        "595b80151ae096c8aa8728033b7592e7f8485a1f"
+      ],
+      "expected_answer_excerpt": "리소스 이름은 snake_case, 태그 Name 은 kebab-case (예: skax-prod-web-server). 모듈은 상대 경로 또는 Git URL.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-042",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "AWS 보안 기준선의 Root 계정과 IAM User 요구사항은?",
+      "expected_page_ids": [
+        "100045"
+      ],
+      "expected_chunk_ids": [
+        "2597cc0ce6507a6cc221888c4b100e2ac9b4c829",
+        "45abfcbe2674833fc89957295cc2dc1f230cd45a"
+      ],
+      "expected_answer_excerpt": "Root 계정 MFA 필수 + 일상 사용 금지 + Access Key 비활성화. IAM User MFA 필수 + 90일 Access Key 로테이션.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-043",
+      "label_source": "claude_bootstrap",
+      "intent": "정책절차",
+      "query": "민감정보 (DB 비밀번호, API 키) 는 어디에 저장해야 하나요?",
+      "expected_page_ids": [
+        "100046"
+      ],
+      "expected_chunk_ids": [
+        "535d3cb501656bd346801050b04b9591a11c7bda",
+        "637b1d884ee0ad6a70c1ca89714af2b9278f6740"
+      ],
+      "expected_answer_excerpt": "AWS Secrets Manager (DB 비밀번호, 외부 API 키), Parameter Store (설정값). 코드/Git 에 절대 포함 금지, .env 는 .gitignore 추가.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-044",
+      "label_source": "claude_bootstrap",
+      "intent": "이력조회",
+      "query": "EKS 노드 월간 사용량 통계 첨부의 2026년 Q1 평균 노드 수는?",
+      "expected_page_ids": [
+        "100014"
+      ],
+      "expected_chunk_ids": [
+        "483a4e4ea82da045744c0d6c27e9b11f353d9fed",
+        "6104ea84630b78062d0e59823662d3faddeaf227"
+      ],
+      "expected_answer_excerpt": "1월 평균 18노드, 2월 평균 20노드, 3월 평균 22노드 — 분기 평균 약 20노드 운영.",
+      "is_attachment_focused": true,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-045",
+      "label_source": "claude_bootstrap",
+      "intent": "이력조회",
+      "query": "EKS 클러스터를 v1.28 에서 v1.29 로 업그레이드한 작업 이력은?",
+      "expected_page_ids": [
+        "100002"
+      ],
+      "expected_chunk_ids": [
+        "05f041b272e3b005a0cbd8308bd197abdc87d3cd",
+        "c72cf51d8e80dea1c729ed01d4694eef4f7829bb"
+      ],
+      "expected_answer_excerpt": "2026-02-12 (수) 작업, 대상: prod-main-eks + staging-eks. 작업자 최태성/이영훈. FlowSchema v1beta2 deprecation 사전 정리.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-046",
+      "label_source": "claude_bootstrap",
+      "intent": "이력조회",
+      "query": "EKS 노드 월간 사용량 통계 첨부에서 야간 시간대의 비용 절감 잠재력은?",
+      "expected_page_ids": [
+        "100014"
+      ],
+      "expected_chunk_ids": [
+        "483a4e4ea82da045744c0d6c27e9b11f353d9fed",
+        "6104ea84630b78062d0e59823662d3faddeaf227"
+      ],
+      "expected_answer_excerpt": "야간 (00~07 KST) 평균 가동률 35% → Dev 환경 야간 셧다운 시 월 약 $800 절감 가능.",
+      "is_attachment_focused": true,
+      "is_answerable": false
+    },
+    {
+      "id": "EVAL-047",
+      "label_source": "claude_bootstrap",
+      "intent": "이력조회",
+      "query": "Azure AKS 와 AWS EKS 의 Control Plane 비용 차이는?",
+      "expected_page_ids": [
+        "100012"
+      ],
+      "expected_chunk_ids": [
+        "b01372b99bbf37603d82b71d6e80ae1afb23ea1c",
+        "fcdeb555664997fef8fe697145d32d1aa53b16af"
+      ],
+      "expected_answer_excerpt": "AWS EKS: $0.10/hr (~$73/월). Azure AKS: 무료 (Standard Tier 는 $0.10/hr 별도).",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-048",
+      "label_source": "claude_bootstrap",
+      "intent": "이력조회",
+      "query": "2026년 1분기 보안 감사에서 발견된 High 심각도 항목은?",
+      "expected_page_ids": [
+        "100047"
+      ],
+      "expected_chunk_ids": [
+        "662b1e5869dd06ca3f3beba3df508742cfeab642",
+        "9a0cf561ddcd250323a4e9996588afdf3c5fe48b"
+      ],
+      "expected_answer_excerpt": "IAM User 2명 MFA 미설정 (1/20 조치 완료). AWS Config + Security Hub 기반 감사.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-049",
+      "label_source": "claude_bootstrap",
+      "intent": "이력조회",
+      "query": "척척학사 프로젝트 킥오프 회의에서 결정된 프로젝트 범위와 기간은?",
+      "expected_page_ids": [
+        "100052"
+      ],
+      "expected_chunk_ids": [
+        "025c8a6739b6406b95aa05ccc031bc94e0067092",
+        "cdd87e153873cc2bd5c42da72f304f3e264caf54"
+      ],
+      "expected_answer_excerpt": "Confluence 기반 RAG 챗봇 PoC 7주 (이후 8주 확정). 핵심 기능: 자연어 질의응답, 인용 출처, 멀티턴 대화.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    },
+    {
+      "id": "EVAL-050",
+      "label_source": "human",
+      "intent": "이력조회",
+      "query": "Vector DB 로 Qdrant 를 선정한 ADR 의 근거는?",
+      "expected_page_ids": [
+        "100055"
+      ],
+      "expected_chunk_ids": [
+        "7fe5c6bbc043839f6d89e4900fa510f68129a551"
+      ],
+      "expected_answer_excerpt": "Dense + Sparse를 단일 Point에 동시 저장하여 Hybrid Search를 단일 쿼리로 처리, Payload 필터링이 검색과 동시에 수행되어 ACL 적용에 추가 성능 비용 없음, 오픈소스 Apache 2.0 셀프호스팅으로 사내 데이터 외부 유출 위험 제거.",
+      "is_attachment_focused": false,
+      "is_answerable": true
+    }
+  ]
+}
