@@ -135,9 +135,10 @@ def _print_branch_notes(response: QueryResponse) -> None:
     notes: list[str] = []
     if not response.sources:
         notes.append("RETRIEVAL_EMPTY 분기 — 권한 범위 내 검색 결과 0건. LLM 미호출 표준 응답.")
-    elif all(source.score < 20 for source in response.sources):
+    elif all(source.score < 55 for source in response.sources):
         notes.append(
-            "LOW_CONFIDENCE 분기 — 모든 출처 점수가 임계(20) 미만. feedback_enabled=false."
+            "LOW_CONFIDENCE 분기 — 모든 출처 점수가 임계(55, formatter.LOW_CONFIDENCE_SCORE) "
+            "미만. feedback_enabled=false."
         )
     if any(item.status is VerificationStatus.NOT_SUPPORTED for item in response.verification):
         not_supported = sum(

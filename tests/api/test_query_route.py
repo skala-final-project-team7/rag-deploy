@@ -15,6 +15,12 @@ feature13 마이그레이션 정합 (api-spec v2.2.0):
     ``verification``=집계 ``{"confidenceScore", "verificationResult"}``(검색 0건이면 생략),
     ``meta``(현재 구현 호환용 — intent/used_llm/feedback_enabled/latency_ms + title),
     ``done``=``{}``.
+
+2026-06-10 코드 리뷰 재점검(A14·A15) 정합:
+  - 비-streaming 경로도 ``status`` 4종(connecting/acl_filtering/searching/formatting)을
+    송신한다(스펙 §1-1 불변식 #1) — connecting~searching 은 run_query 직전, formatting 직후.
+  - SSE ``error.message`` 는 내부 예외 원문이 아니라 errorCode 별 고정 안내 문구다
+    (내부 상세는 서버 로그 전용 — ``_classify_ml_error`` 가 ML_* 3종으로 분류).
 """
 
 import json
@@ -26,8 +32,9 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
+from app.api.errors import ErrorCode
 from app.api.main import create_app
-from app.api.routes import get_graph
+from app.api.routes import _classify_ml_error, get_graph
 from app.config import Settings
 from app.ingestion.embedder.base import FakeDenseEmbedder, FakeSparseEmbedder
 from app.ingestion.indexer import index_chunks
@@ -188,7 +195,12 @@ def _parse_sse(body: str) -> list[tuple[str, str]]:
 
 @pytest.mark.asyncio
 async def test_query_route_emits_full_sse_sequence(populated_graph: Any) -> None:
-    """정상 흐름: token → sources → verification → meta → done 5개 이벤트 시퀀스."""
+    """정상 흐름: status 4종 + token → sources → verification → meta → done 시퀀스.
+
+    코드 리뷰 A14 — 비-streaming 경로도 ``status`` 4종을 송신한다(스펙 §1-1 불변식 #1).
+    connecting/acl_filtering/searching 은 run_query 직전, formatting 은 직후에 와서
+    모든 status 가 token 보다 앞선다. 핵심 5종 시퀀스는 status 제외 시 종전과 동일.
+    """
     async with _client(populated_graph) as client:
         resp = await client.post("/ml/query", json=_body())
     assert resp.status_code == 200
@@ -196,7 +208,18 @@ async def test_query_route_emits_full_sse_sequence(populated_graph: Any) -> None
 
     events = _parse_sse(resp.text)
     event_names = [name for name, _ in events]
-    assert event_names == ["token", "sources", "verification", "meta", "done"]
+    assert event_names == [
+        "status",
+        "status",
+        "status",
+        "status",
+        "token",
+        "sources",
+        "verification",
+        "meta",
+        "done",
+    ]
+    assert _status_phases(events) == ["connecting", "acl_filtering", "searching", "formatting"]
 
     # token 페이로드는 {"content": ...} JSON.
     assert isinstance(_content(dict(events)["token"]), str)
@@ -298,16 +321,23 @@ async def test_query_route_stream_true_falls_back_when_no_generator_provider(
     """PoC 안전 fallback — stream=True 라도 deps.generator_provider 없으면 비-streaming.
 
     `_should_fallback_to_non_streaming` 회귀 — app.state.deps 가 미설정 / generator
-    _provider None / settings.openai_api_key 빈 SecretStr 중 하나라도 해당하면
-    stream=True 가 무시되고 기존 run_query 흐름으로 4 이벤트 송신.
+    _provider None / generator_config None / settings.openai_api_key 빈 SecretStr 중
+    하나라도 해당하면 stream=True 가 무시되고 기존 run_query 흐름으로 처리된다.
     """
     async with _client(populated_graph) as client:
         resp = await client.post("/ml/query", json=_body(stream=True))
     assert resp.status_code == 200
     events = _parse_sse(resp.text)
-    # fallback 흐름은 기존 5 이벤트 시퀀스 그대로 — token 1회 + 후행 4종.
+    # fallback 흐름은 비-streaming 시퀀스 그대로 — status 축약 4종 + token 1회 + 후행 4종.
     event_names = [name for name, _ in events]
-    assert event_names == ["token", "sources", "verification", "meta", "done"]
+    assert [n for n in event_names if n != "status"] == [
+        "token",
+        "sources",
+        "verification",
+        "meta",
+        "done",
+    ]
+    assert _status_phases(events) == ["connecting", "acl_filtering", "searching", "formatting"]
 
 
 def _streaming_client(
@@ -567,7 +597,9 @@ async def test_query_route_stream_false_forces_non_streaming(
 
     ``_streaming_client`` 는 deps.generator_provider/openai_api_key 를 채워 streaming 분기가
     가능한 상태를 만든다. 그럼에도 ``stream=False`` 요청은 단일 token(전체 답변) + 후행 4종의
-    비-streaming 5 이벤트 시퀀스로 응답해야 한다(stream 플래그가 서버 가용성보다 우선).
+    비-streaming 시퀀스로 응답해야 한다(stream 플래그가 서버 가용성보다 우선). 코드 리뷰
+    A14 이후 비-streaming 도 status 를 송신하므로, streaming 전용 phase(answering/streaming/
+    verifying)의 부재 + token 1회를 비-streaming 진입의 신호로 단언한다.
     """
     client = _streaming_client(
         populated_graph,
@@ -579,9 +611,15 @@ async def test_query_route_stream_false_forces_non_streaming(
     assert resp.status_code == 200
     events = _parse_sse(resp.text)
     event_names = [name for name, _ in events]
-    # 비-streaming — status 이벤트 없음, token 정확히 1회 + 후행 4종.
-    assert "status" not in event_names
-    assert event_names == ["token", "sources", "verification", "meta", "done"]
+    # 비-streaming — status 는 축약 4종뿐(streaming 전용 phase 없음), token 정확히 1회.
+    assert _status_phases(events) == ["connecting", "acl_filtering", "searching", "formatting"]
+    assert [n for n in event_names if n != "status"] == [
+        "token",
+        "sources",
+        "verification",
+        "meta",
+        "done",
+    ]
 
 
 # --- feature19: SSE 진행 status 이벤트 ---
@@ -727,3 +765,103 @@ async def test_query_route_stream_core_events_unchanged_with_status(
     assert token_contents[: len(streaming_tokens)] == streaming_tokens
     # done 은 빈 객체 {}.
     assert non_status[-1] == ("done", "{}")
+
+
+# --- 2026-06-10 코드 리뷰(A15): SSE error — errorCode 분류 + 고정 안내 문구 ---
+
+
+class _RaisingGraph:
+    """invoke 진입 즉시 지정 예외를 던지는 그래프 stub — 비-streaming SSE error 회귀용.
+
+    ``run_query`` 가 ``graph.invoke(state)`` 를 호출하므로 invoke 만 구현하면 충분하다.
+    """
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def invoke(self, state: Any) -> Any:
+        raise self._exc
+
+
+async def _post_error_query(exc: Exception) -> list[tuple[str, str]]:
+    """예외를 던지는 그래프로 비-streaming 질의를 보내고 SSE 이벤트 목록을 돌려준다."""
+    async with _client(_RaisingGraph(exc)) as client:
+        resp = await client.post("/ml/query", json=_body())
+    assert resp.status_code == 200  # 오류도 SSE error 이벤트로 전달 (HTTP 에러 아님).
+    return _parse_sse(resp.text)
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_error_event_timeout_uses_fixed_message() -> None:
+    """TimeoutError → errorCode=ML_TIMEOUT + 고정 안내 문구. 내부 원문은 미노출(A15)."""
+    events = await _post_error_query(TimeoutError("internal-secret: read timed out at 10.0.0.7"))
+    # 오류 시퀀스 — invoke 직전 status 3종(connecting/acl_filtering/searching) 후
+    # error 로 종료한다(formatting/token 없음).
+    assert [name for name, _ in events] == ["status", "status", "status", "error"]
+    assert _status_phases(events) == ["connecting", "acl_filtering", "searching"]
+    payload = json.loads(dict(events)["error"])
+    assert payload["errorCode"] == "ML_TIMEOUT"
+    assert payload["message"] == "답변 생성이 제한 시간 내에 완료되지 않았습니다"
+    # 내부 예외 원문(상류 상세·내부 주소)은 클라이언트에 노출되지 않는다.
+    assert "internal-secret" not in json.dumps(dict(events), ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_error_event_connection_uses_fixed_message() -> None:
+    """ConnectionError → errorCode=ML_CONNECTION_ERROR + 고정 안내 문구(A15)."""
+    events = await _post_error_query(ConnectionError("refused: 10.0.0.7:6333"))
+    payload = json.loads(dict(events)["error"])
+    assert payload["errorCode"] == "ML_CONNECTION_ERROR"
+    assert payload["message"] == "답변 생성 서비스에 연결하지 못했습니다"
+    assert "10.0.0.7" not in payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_error_event_generic_uses_fixed_message() -> None:
+    """그 외 예외 → errorCode=ML_SERVER_ERROR + 고정 안내 문구. 예외 원문 미노출(A15)."""
+    events = await _post_error_query(RuntimeError("traceback 상세 — 내부 request-id=abc123"))
+    payload = json.loads(dict(events)["error"])
+    assert payload["errorCode"] == "ML_SERVER_ERROR"
+    assert payload["message"] == "답변 생성 중 오류가 발생했습니다"
+    assert "abc123" not in json.dumps(dict(events), ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_acl_violation_uses_fixed_message() -> None:
+    """ACLViolationError 표면화 → ML_SERVER_ERROR + ACL 전용 고정 문구(시스템 단 안전망)."""
+    from app.query.acl import ACLViolationError
+
+    events = await _post_error_query(ACLViolationError("acl filter missing in node X"))
+    payload = json.loads(dict(events)["error"])
+    assert payload["errorCode"] == "ML_SERVER_ERROR"
+    assert payload["message"] == "접근 권한 처리 중 오류가 발생했습니다"
+    assert "node X" not in json.dumps(dict(events), ensure_ascii=False)
+
+
+# --- _classify_ml_error 단위 — api-spec §1-1 ML_* 3종 분류 ---
+
+
+def test_classify_ml_error_timeout_variants() -> None:
+    """표준 TimeoutError + 클래스명에 'Timeout' 을 포함한 예외(openai.APITimeoutError 상당)."""
+
+    class APITimeoutError(Exception):  # openai 미설치 환경 정합 — 이름 기반 판별 회귀.
+        pass
+
+    assert _classify_ml_error(TimeoutError("t")) is ErrorCode.ML_TIMEOUT
+    assert _classify_ml_error(APITimeoutError("t")) is ErrorCode.ML_TIMEOUT
+
+
+def test_classify_ml_error_connection_variants() -> None:
+    """표준 ConnectionError + 클래스명에 'Connection' 을 포함한 예외."""
+
+    class APIConnectionError(Exception):  # openai.APIConnectionError 상당.
+        pass
+
+    assert _classify_ml_error(ConnectionError("c")) is ErrorCode.ML_CONNECTION_ERROR
+    assert _classify_ml_error(APIConnectionError("c")) is ErrorCode.ML_CONNECTION_ERROR
+
+
+def test_classify_ml_error_other_falls_back_to_server_error() -> None:
+    """타임아웃/연결 어느 쪽도 아니면 ML_SERVER_ERROR (내부 처리 오류 기본값)."""
+    assert _classify_ml_error(RuntimeError("boom")) is ErrorCode.ML_SERVER_ERROR
+    assert _classify_ml_error(ValueError("bad")) is ErrorCode.ML_SERVER_ERROR

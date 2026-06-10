@@ -191,6 +191,9 @@ def build_openai_chat_transport(
             ) from exc
         except APIError as exc:
             raise OpenAITransportError(status_code=500, message=str(exc)) from exc
+        finally:
+            # 호출마다 생성하는 클라이언트의 커넥션 풀을 항상 정리한다(코드 리뷰 A7).
+            client.close()
 
         content = _extract_first_message_content(completion)
         return _parse_json_payload(content)

@@ -71,7 +71,10 @@ class JsonFixtureSourceAdapter(DocumentSourceAdapter):
 
     [첨부 처리]
     샘플 JSON은 첨부 메타(filename/content_type)만 가진다. 누락 필드는 합성하며,
-    텍스트 추출(extracted_text)은 다운스트림(첨부 분석기) 책임이므로 빈 문자열로 둔다.
+    청커가 직접 열 실제 경로를 ``local_path`` 에 채운다(ADR-2026-001 — 파일 기반 추출이
+    정공법). ``extracted_text`` 는 빈 문자열로 두며, 분석기는 빈 텍스트 + local_path
+    조합을 파일 기반 추출(chunk_attachment)로 위임한다(P1-3 — 분석기·어댑터 누구도
+    텍스트를 추출하지 않는다).
     """
 
     def __init__(
@@ -145,7 +148,8 @@ class JsonFixtureSourceAdapter(DocumentSourceAdapter):
 
         샘플 JSON은 첨부 메타(filename/content_type)만 가지므로 누락 필드를 합성한다.
         download_url은 사용자 노출용 URI(file:// scheme)이며, 청커가 직접 열 실제 경로는
-        local_path에 채운다 (ADR-2026-001). extracted_text는 다운스트림(첨부 분석기)이 채운다.
+        local_path에 채운다 (ADR-2026-001). extracted_text는 빈 문자열로 두고, 분석기가
+        빈 텍스트 + local_path 조합을 파일 기반 추출(chunk_attachment)로 위임한다(P1-3).
         """
         page_id = raw["id"]
         attachments: list[Attachment] = []

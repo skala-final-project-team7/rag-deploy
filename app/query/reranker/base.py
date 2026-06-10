@@ -32,9 +32,9 @@ class CrossEncoderReranker(ABC):
     담당한다.
 
     반환 점수는 ``[0.0, 1.0]`` 범위여야 한다 — ``select_reranked`` 의 임계값
-    (``NARROW_SCORE_THRESHOLD=0.30``, ``LOW_CONFIDENCE_THRESHOLD=0.20``) 정합. 실
-    모델 어댑터(``CrossEncoderRerankerImpl``)는 Sigmoid 활성화 함수를 통해
-    이 계약을 강제한다.
+    (``NARROW_SCORE_THRESHOLD=0.65``, ``LOW_CONFIDENCE_THRESHOLD=0.55`` —
+    feature17c temperature scaling 재조정 기준) 정합. 실 모델 어댑터
+    (``CrossEncoderRerankerImpl``)는 Sigmoid 활성화 함수를 통해 이 계약을 강제한다.
     """
 
     @abstractmethod

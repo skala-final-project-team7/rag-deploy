@@ -12,7 +12,6 @@
 - vector_store.py       Multi-Pool Vector Store [Storage]  Qdrant title/content/label pool upsert
 - indexer.py            인덱싱 오케스트레이터 [Pipeline]  청크 → 임베딩 → upsert + chunk_lookup 적재
 - sync.py               삭제 동기화 [Pipeline]  Reconciliation 중심 3중 전략 (고스트 데이터 방지)
-- jobs.py               ingestion_jobs 상태 기록 헬퍼
 
 구현 상태:
 - attachment_analyzer.py  AttachmentAnalysisResult + analyze_attachment [feature6 Phase 1]

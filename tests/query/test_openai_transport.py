@@ -39,7 +39,11 @@ class _FakeCompletion:
 
 
 class _FakeClient:
-    """OpenAI client 대체 — chat.completions.create 만 받는 최소 스텁."""
+    """OpenAI client 대체 — chat.completions.create + close 를 받는 최소 스텁.
+
+    2026-06-10(A7): ``_transport`` 가 finally 에서 ``client.close()`` 를 호출하므로
+    실 SDK 와 동일하게 close() 를 제공하고 호출 여부를 추적한다.
+    """
 
     def __init__(
         self,
@@ -50,6 +54,7 @@ class _FakeClient:
         self._response_content = response_content
         self._raise_error = raise_error
         self.captured_kwargs: dict[str, Any] | None = None
+        self.closed = False
         self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs: Any) -> _FakeCompletion:
@@ -57,6 +62,9 @@ class _FakeClient:
         if self._raise_error is not None:
             raise self._raise_error
         return _FakeCompletion(self._response_content)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class _FakeAPITimeoutError(Exception):

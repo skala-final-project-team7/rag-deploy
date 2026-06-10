@@ -14,6 +14,10 @@
 작성일 : 2026-05-19
 변경사항 내역 (날짜, 변경목적, 변경내용 순)
   - 2026-05-19, 최초 작성, Agent 통합 3/4 — manage_verifier_evaluator 어댑터
+  - 2026-06-10, 코드 리뷰 재점검(A6) — provider 실패 fail-open(SUPPORTED fallback)
+    경로에 warning 로그 + ``verifier_provider_failure_total`` 메트릭 추가. 종전
+    주석의 "호출자가 alert 처리" 전제는 실제 호출자에 alert 가 없어 제거(본 모듈이
+    직접 관측 책임을 진다).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, Pydantic 2.7+
@@ -43,6 +47,8 @@
 --------------------------------------------------
 """
 
+import logging
+
 from answer_verification_agent.config import AnswerVerificationConfig
 from answer_verification_agent.evaluator.providers import (
     AnswerEvaluatorProvider,
@@ -56,10 +62,13 @@ from answer_verification_agent.verification.input_normalization import (
 from answer_verification_agent.verification.suspicious_selector import (
     SuspiciousSentenceTarget,
 )
+from app.metrics import verifier_provider_failure_total
 from app.query.verifier import SentenceCheck
 from app.schemas.chunk import Chunk
 from app.schemas.enums import VerificationStatus
 from app.schemas.response import Verification
+
+_LOGGER = logging.getLogger(__name__)
 
 # agent SentenceLabel → rag VerificationStatus 매핑. 설계서 §4.7 은 PASS /
 # SUPPORTED / NOT_SUPPORTED 3종만 정의 — LOW_CONFIDENCE / NOT_CHECKED 는 본
@@ -144,10 +153,18 @@ def manage_verifier_evaluator(
         try:
             evaluation = selected_provider.evaluate_sentence(target, normalized_contexts)
         except EvaluatorProviderError:
-            # provider 실패 — 보수적이지 않게 stub 정합 SUPPORTED 로 안전 fallback.
-            # 환각 차단을 우선시한다면 NOT_SUPPORTED 가 맞지만, stub 의 기본 동작
-            # (모두 SUPPORTED)을 유지해 회귀 테스트와 정합한다. provider 실패의
-            # 책임은 호출자(verify_pipeline_node)가 alert 로 처리.
+            # provider 실패 — stub 정합 SUPPORTED 로 fallback(회귀 테스트 정합).
+            # 환각 차단을 우선시한다면 NOT_SUPPORTED 가 맞지만 정책 변경은 BFF/FE
+            # 합의 필요. 대신 fail-open 이 조용히 지나가지 않도록 본 모듈이 직접
+            # warning + 메트릭으로 관측한다(코드 리뷰 A6 — 운영 알림:
+            # increase(verifier_provider_failure_total[5m]) > 0).
+            _LOGGER.warning(
+                "verifier evaluator provider failed; sentence_id=%s falls back to "
+                "SUPPORTED (hallucination gate inactive for this sentence)",
+                check.sentence_id,
+                exc_info=True,
+            )
+            verifier_provider_failure_total.inc()
             verifications.append(
                 Verification(
                     sentence_id=check.sentence_id,

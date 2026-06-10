@@ -88,10 +88,20 @@ intent_classification_total: Counter = Counter(
     labelnames=("intent",),
 )
 
+# 검증 2단계 LLM provider 호출 실패 카운터 — 코드 리뷰 A6. provider 실패 시 해당
+# 의심 문장은 stub 정합 정책으로 SUPPORTED fallback 되므로(verifier_evaluator),
+# 환각 차단이 조용히 비활성화되는 빈도를 반드시 관측해야 한다.
+# 운영 알림 권장: ``increase(verifier_provider_failure_total[5m]) > 0``.
+verifier_provider_failure_total: Counter = Counter(
+    "verifier_provider_failure_total",
+    "Verification stage-2 evaluator provider failures (sentence fell back to SUPPORTED)",
+)
+
 
 __all__ = [
     "answer_generation_latency_seconds",
     "intent_classification_total",
     "llm_fallback_total",
     "verification_status_total",
+    "verifier_provider_failure_total",
 ]

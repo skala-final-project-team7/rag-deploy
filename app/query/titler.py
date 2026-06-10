@@ -93,14 +93,18 @@ def generate_conversation_title(
     from openai import OpenAI
 
     client = OpenAI(api_key=api_key, timeout=timeout_seconds)
-    completion = client.chat.completions.create(  # type: ignore[call-overload]
-        model=model,
-        messages=[
-            {"role": "system", "content": _TITLE_SYSTEM_PROMPT},
-            {"role": "user", "content": f"질문: {question}\n답변: {answer}"},
-        ],
-        temperature=0.3,
-    )
+    # try/finally — 호출마다 생성하는 클라이언트의 커넥션 풀을 항상 정리한다(A7).
+    try:
+        completion = client.chat.completions.create(  # type: ignore[call-overload]
+            model=model,
+            messages=[
+                {"role": "system", "content": _TITLE_SYSTEM_PROMPT},
+                {"role": "user", "content": f"질문: {question}\n답변: {answer}"},
+            ],
+            temperature=0.3,
+        )
+    finally:
+        client.close()
     choices = getattr(completion, "choices", None) or []
     content = ""
     if choices:

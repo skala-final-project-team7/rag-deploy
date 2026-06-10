@@ -5,6 +5,9 @@
   미지원 → UNSUPPORTED_ATTACH_TYPE
 - ② 텍스트 유효성: extracted_text 200자 미만 또는 동일 문자 반복 비율 > 80%
   → LOW_QUALITY_ATTACH
+- ②' 위임(2026-06-10, 코드 리뷰 P1-3): extracted_text 가 비어 있고 파일 원천
+  (local_path/download_url)이 있으면 품질 게이트를 건너뛰고 파일 기반 추출
+  (chunk_attachment)로 위임 — SUCCESS. 원천이 전혀 없으면 종전대로 LOW_QUALITY_ATTACH.
 
 분석기는 ①② 두 단계만 책임. 메타데이터 부착(③)은 chunker `build_attachment_metadata`
 가, Adaptive Chunker 호출(④)은 Ingestion 그래프 노드가 책임 (책임 분리 정합).
@@ -43,6 +46,8 @@ def _attachment(
     mime_type: str = "application/pdf",
     extracted_text: str = _DEFAULT_TEXT,
     extracted_format: ExtractedFormat = ExtractedFormat.RAW_TEXT,
+    download_url: str = "file:///tmp/sample",
+    local_path: str | None = None,
 ) -> Attachment:
     return Attachment(
         attachment_id=attachment_id,
@@ -50,9 +55,10 @@ def _attachment(
         mime_type=mime_type,
         extracted_text=extracted_text,
         extracted_format=extracted_format,
-        download_url="file:///tmp/sample",
+        download_url=download_url,
         parent_page_id="P1",
         last_modified=datetime.fromisoformat("2026-04-22T08:15:00+09:00"),
+        local_path=local_path,
     )
 
 
@@ -129,10 +135,57 @@ def test_text_below_200_chars_marked_low_quality() -> None:
     assert "200" in result.reason or "length" in result.reason.lower()
 
 
-def test_empty_text_marked_low_quality() -> None:
-    result = analyze_attachment(_attachment(extracted_text=""))
+def test_empty_text_without_file_source_marked_low_quality() -> None:
+    """빈 extracted_text + 파일 원천(local_path/download_url) 없음 → 종전대로 LOW_QUALITY.
+
+    P1-3 위임은 파일 원천이 있을 때만 적용된다 — 원천이 전혀 없으면 추출을 위임할
+    곳이 없으므로 품질 게이트가 그대로 차단한다(기존 동작 보존).
+    """
+    result = analyze_attachment(_attachment(extracted_text="", download_url="", local_path=None))
     assert result.status is IngestionStatus.LOW_QUALITY_ATTACH
     assert result.analyzable is False
+
+
+# --- ②' 파일 기반 추출 위임 (2026-06-10, 코드 리뷰 P1-3) ---
+
+
+def test_empty_text_with_download_url_delegates_to_file_extraction() -> None:
+    """빈 extracted_text + download_url → 품질 게이트를 건너뛰고 SUCCESS(추출 위임).
+
+    어댑터가 텍스트를 채우지 않는 경로(atlassian: download_url→다운로더)에서 모든
+    첨부가 LOW_QUALITY_ATTACH 로 스킵되던 회귀(첨부 ingest 사실상 비활성)를 보호한다.
+    """
+    result = analyze_attachment(_attachment(extracted_text=""))  # download_url 기본 채움.
+    assert result.status is IngestionStatus.SUCCESS
+    assert result.analyzable is True
+    # 유형 판별(①)은 그대로 선행 — 위임 결과에도 attachment_type 이 채워진다.
+    assert result.attachment_type is AttachmentType.PDF
+    assert "위임" in result.reason
+
+
+def test_empty_text_with_local_path_delegates_to_file_extraction() -> None:
+    """빈 extracted_text + local_path(fixture 경로) → download_url 없이도 SUCCESS(위임)."""
+    result = analyze_attachment(
+        _attachment(extracted_text="", download_url="", local_path="/tmp/fixtures/manual.pdf")
+    )
+    assert result.status is IngestionStatus.SUCCESS
+    assert result.analyzable is True
+
+
+def test_short_nonempty_text_still_low_quality_even_with_file_source() -> None:
+    """텍스트가 채워져 있으면(빈 문자열 아님) 파일 원천이 있어도 품질 게이트 그대로 적용."""
+    result = analyze_attachment(
+        _attachment(extracted_text="짧음", local_path="/tmp/fixtures/manual.pdf")
+    )
+    assert result.status is IngestionStatus.LOW_QUALITY_ATTACH
+
+
+def test_unsupported_type_takes_precedence_over_delegation() -> None:
+    """① 유형 판별 실패는 빈 텍스트 위임보다 우선 — UNSUPPORTED_ATTACH_TYPE 유지."""
+    result = analyze_attachment(
+        _attachment(filename="diagram.png", mime_type="image/png", extracted_text="")
+    )
+    assert result.status is IngestionStatus.UNSUPPORTED_ATTACH_TYPE
 
 
 # --- ② 텍스트 유효성: 동일 문자 반복 ---

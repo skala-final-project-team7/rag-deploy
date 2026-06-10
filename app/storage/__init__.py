@@ -15,6 +15,9 @@
   ``FakeIngestionJobsRepository`` + ``IngestionJobRecord``. db-schema §2.3의
   ``ingestion_jobs`` 컬렉션 어댑터. Ingestion 파이프라인 각 단계(analyze/chunk/embed/
   upsert/sync) 처리 결과를 기록한다.
+- ``space_doc_type_cache.py`` — ``SpaceDocTypeCache`` ABC + ``MySQLSpaceDocTypeCache`` +
+  ``FakeSpaceDocTypeCache`` + ``SpaceDocTypeEntry``. 스페이스 단위 doc_type 판별 결과의
+  MySQL 캐시 어댑터(문서 분석기[Agent] 비용 절감).
 
 Ingestion·Query 파이프라인은 본 패키지의 추상화만 통해 저장소에 접근하며, 모델·라이브러리
 종속을 격리한다.
@@ -39,6 +42,12 @@ from app.storage.mongo_cache import (
     MongoEmbeddingCache,
 )
 from app.storage.qdrant_client import QdrantPoolStore, SearchHit
+from app.storage.space_doc_type_cache import (
+    FakeSpaceDocTypeCache,
+    MySQLSpaceDocTypeCache,
+    SpaceDocTypeCache,
+    SpaceDocTypeEntry,
+)
 
 __all__ = [
     "ChunkLookupRecord",
@@ -48,11 +57,15 @@ __all__ = [
     "FakeChunkTextLookup",
     "FakeEmbeddingCache",
     "FakeIngestionJobsRepository",
+    "FakeSpaceDocTypeCache",
     "IngestionJobRecord",
     "IngestionJobsRepository",
     "MongoChunkTextLookup",
     "MongoEmbeddingCache",
     "MongoIngestionJobsRepository",
+    "MySQLSpaceDocTypeCache",
     "QdrantPoolStore",
     "SearchHit",
+    "SpaceDocTypeCache",
+    "SpaceDocTypeEntry",
 ]

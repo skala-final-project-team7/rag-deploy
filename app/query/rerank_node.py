@@ -171,7 +171,7 @@ def _chunk_to_source(
 
     raw score는 어댑터 측에서 ``[0.0, 1.0]`` 으로 정규화된 상태(9-B-1 Sigmoid)다. Source.
     score는 ``int 0~100`` 스케일이므로 ``round(raw_score * 100)`` 로 변환한다 — 포맷터
-    (feature11)의 ``LOW_CONFIDENCE_SCORE`` 임계값(20)과 정합.
+    (feature11)의 ``LOW_CONFIDENCE_SCORE`` 임계값(55 — feature17c 재조정)과 정합.
 
     ``download_url`` 은 호출자(cross_encoder_rerank)가 ChunkTextLookup 으로 첨부 청크
     에 대해 배치 조회해 주입한다. 본문 청크는 None.
@@ -193,4 +193,7 @@ def _chunk_to_source(
         attachment_filename=metadata.attachment_filename,
         attachment_mime=metadata.attachment_mime,
         download_url=download_url,
+        # sources[].pageId — BFF 가 출처 추적용으로 영속(api-spec §1-1). 누락 시
+        # 빈 문자열 기본값이 그대로 송신되므로 반드시 주입한다(코드 리뷰 A8).
+        page_id=metadata.page_id,
     )

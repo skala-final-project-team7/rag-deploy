@@ -5,7 +5,8 @@
 작성목적 : sentence-transformers의 ``CrossEncoder`` 를 래핑해 CrossEncoderReranker
           인터페이스(`app/query/reranker/base.py`)를 구현한다. Sigmoid 활성화로 raw
           logit을 ``[0.0, 1.0]`` 점수로 변환해 ``select_reranked`` (feature9-A)의 임계값
-          (NARROW 0.30 / LOW 0.20)과 정합시킨다 (`docs/rag-pipeline-design.md` §6 4.5,
+          (NARROW 0.65 / LOW 0.55 — feature17c 재조정)과 정합시킨다
+          (`docs/rag-pipeline-design.md` §6 4.5,
           `app/CLAUDE.md` §8).
 작성일 : 2026-05-18
 변경사항 내역 (날짜, 변경목적, 변경내용 순)

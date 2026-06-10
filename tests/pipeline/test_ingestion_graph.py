@@ -61,6 +61,8 @@ def _page(
         "이 문단은 본문 청킹 검증을 위한 최소 길이를 충족합니다.</p>"
     ),
     attachments: list[Attachment] | None = None,
+    allowed_groups: list[str] | None = None,
+    allowed_users: list[str] | None = None,
 ) -> PageObject:
     return PageObject(
         page_id=page_id,
@@ -69,8 +71,8 @@ def _page(
         body_html=body_html,
         version_number=1,
         last_modified=datetime.fromisoformat("2026-04-22T08:15:00+09:00"),
-        allowed_groups=["space:CLOUD"],
-        allowed_users=[],
+        allowed_groups=allowed_groups if allowed_groups is not None else ["space:CLOUD"],
+        allowed_users=allowed_users if allowed_users is not None else [],
         webui_link="/display/CLOUD/eks",
         labels=["eks", "운영"],
         ancestors=["Cloud 운영 문서"],
@@ -270,6 +272,91 @@ def test_pdf_attachment_skipped_with_jobs_record(deps: IngestionGraphDeps) -> No
     attach_jobs = [r for r in deps.jobs.records if r.attachment_id == "ATT-pdf"]
     assert attach_jobs, "PDF 첨부 잡 기록이 필요하다"
     assert all(r.status is not IngestionStatus.SUCCESS for r in attach_jobs)
+    # ATTACH_ENCRYPTED 표식 없는 일반 ValueError 는 UNSUPPORTED_ATTACH_TYPE 로 기록(P4 대비).
+    assert any(r.status is IngestionStatus.UNSUPPORTED_ATTACH_TYPE for r in attach_jobs)
+
+
+# --- 암호화 첨부 (ATTACH_ENCRYPTED — 2026-06-10 코드 리뷰 P4) ---
+
+
+def _encrypted_attachment_chunk(
+    attachment: Attachment, page: PageObject, attachment_type: AttachmentType | str | None
+) -> list[Chunk]:
+    """암호화 PDF 상당 — 실제 chunk_attachment 의 ATTACH_ENCRYPTED 표식 ValueError 재현."""
+    raise ValueError("ATTACH_ENCRYPTED: 암호화된 PDF — 텍스트 추출 불가")
+
+
+def test_encrypted_attachment_recorded_as_attach_encrypted() -> None:
+    """첨부 청킹 ValueError 에 ATTACH_ENCRYPTED 표식이 있으면 UNSUPPORTED_ATTACH_TYPE
+    대신 ATTACH_ENCRYPTED 로 잡 기록한다(본문은 정상 적재 — ingestion 워커 매핑 정합)."""
+    settings = _settings()
+    store = QdrantPoolStore.in_memory(settings, dense_dimension=8)
+    store.bootstrap_collections()
+    deps = IngestionGraphDeps(
+        dense_embedder=FakeDenseEmbedder(dimension=8),
+        sparse_embedder=FakeSparseEmbedder(),
+        store=store,
+        cache=FakeEmbeddingCache(),
+        chunk_lookup=FakeChunkTextLookup(),
+        jobs=FakeIngestionJobsRepository(),
+        chunk_attachment_fn=_encrypted_attachment_chunk,
+    )
+    page = _page(attachments=[_attachment(attachment_id="ATT-enc")])
+    state = IngestionState(page=page)
+
+    run_ingestion(state, graph=build_ingestion_graph(deps))
+
+    # 본문은 정상 적재, 암호화 첨부는 미적재.
+    assert deps.store.scroll_page_ids() == {"P1"}
+    assert deps.store.scroll_attachment_ids() == set()
+    attach_jobs = [r for r in deps.jobs.records if r.attachment_id == "ATT-enc"]
+    assert attach_jobs, "암호화 첨부 잡 기록이 필요하다"
+    assert any(r.status is IngestionStatus.ATTACH_ENCRYPTED for r in attach_jobs)
+    assert all(r.status is not IngestionStatus.UNSUPPORTED_ATTACH_TYPE for r in attach_jobs)
+    # 에러 원문(표식 포함)이 잡 기록에 보존된다 — 운영 디버깅용.
+    encrypted_job = next(r for r in attach_jobs if r.status is IngestionStatus.ATTACH_ENCRYPTED)
+    assert "ATTACH_ENCRYPTED" in (encrypted_job.error or "")
+
+
+# --- INVALID_ACL 게이트 (2026-06-10 코드 리뷰 P2-8) ---
+
+
+def test_acl_missing_page_skips_chunk_and_upsert_with_invalid_acl_record(
+    deps: IngestionGraphDeps,
+) -> None:
+    """ACL 누락 페이지(allowed_groups·allowed_users 모두 빈 배열) → analyze 단계에서
+    INVALID_ACL 로 기록하고 조건부 엣지로 chunk/upsert 를 건너뛴다(fail-closed)."""
+    page = _page(allowed_groups=[], allowed_users=[])
+    assert page.is_acl_missing  # 전제 — PageObject 의 INVALID_ACL 식별 신호.
+    state = IngestionState(page=page)
+
+    final = run_ingestion(state, graph=build_ingestion_graph(deps))
+
+    # 상태 — analyze 에서 INVALID_ACL 로 종료, 청크 미생성.
+    assert final.status is IngestionStatus.INVALID_ACL
+    assert final.stage is IngestionStage.ANALYZE
+    assert final.chunks == []
+    # 적재 자체가 일어나지 않는다 — upsert 스킵(검색 노출 차단).
+    assert deps.store.scroll_page_ids() == set()
+    assert deps.store.scroll_attachment_ids() == set()
+    # 잡 기록 — ANALYZE/INVALID_ACL 1건뿐, CHUNK/UPSERT stage 기록 없음.
+    assert [(r.stage, r.status) for r in deps.jobs.records] == [
+        (IngestionStage.ANALYZE, IngestionStatus.INVALID_ACL)
+    ]
+    assert deps.jobs.records[0].error  # 색인 제외 사유 문구 동봉.
+
+
+def test_acl_present_page_not_gated_by_invalid_acl(deps: IngestionGraphDeps) -> None:
+    """allowed_users 만 있어도(그룹 없음) ACL 보유로 간주 — 게이트 미적용 회귀 보호."""
+    page = _page(allowed_groups=[], allowed_users=["taesung"])
+    assert not page.is_acl_missing
+    state = IngestionState(page=page)
+
+    final = run_ingestion(state, graph=build_ingestion_graph(deps))
+
+    assert final.status is IngestionStatus.SUCCESS
+    assert final.chunks
+    assert deps.store.scroll_page_ids() == {"P1"}
 
 
 # --- jobs 적재 stage 회귀 ---

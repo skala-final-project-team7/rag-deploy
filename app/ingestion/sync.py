@@ -21,10 +21,18 @@
 --------------------------------------------------
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from app.adapters.base import DocumentSourceAdapter
-from app.storage.qdrant_client import QdrantPoolStore
+
+if TYPE_CHECKING:
+    # 타입 전용 import — 런타임 import 시 app.storage ↔ app.ingestion 순환
+    # (storage/__init__ → qdrant_client → app.ingestion/__init__ → sync → qdrant_client)
+    # 이 생겨 단독 import 순서에 따라 부분 초기화 오류가 났다(2026-06-10 검증에서 발견).
+    from app.storage.qdrant_client import QdrantPoolStore
 
 
 @dataclass(frozen=True, slots=True)

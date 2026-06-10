@@ -3,6 +3,12 @@
 stream_openai_answer: OpenAI Chat Completions streaming 으로 token chunk 를 yield
 하는 sync generator. 실제 OpenAI streaming 호출은 mock 으로 대체하고, prompt 합성
 정합·token 누적·빈 top_chunks 가드 분기를 검증한다.
+
+2026-06-10 코드 리뷰 재점검(A7·P2-7) 회귀 포함:
+  - try/finally 자원 정리 — 정상 소진·중도 close(GeneratorExit) 모두 stream.close() +
+    client.close() 가 호출된다(fake 가 close 호출 여부를 기록).
+  - ``conservative_guard=True`` 면 STREAMING_CONSERVATIVE_GUARD 가 system prompt 끝에
+    덧붙는다(기본 False 는 무변경).
 """
 
 from __future__ import annotations
@@ -16,6 +22,7 @@ from typing import Any
 import pytest
 
 from app.query.openai_streaming import (
+    STREAMING_CONSERVATIVE_GUARD,
     StreamingTokenChunk,
     build_streaming_user_prompt,
     stream_openai_answer,
@@ -97,17 +104,46 @@ class _FakeStreamChunk:
         self.choices = [_FakeStreamChoice(content)]
 
 
+class _FakeStream:
+    """``create(stream=True)`` 반환 스트림 대체 — iteration + close() 호출 추적.
+
+    2026-06-10(A7) — ``stream_openai_answer`` 가 try/finally 로 ``stream.close()`` 를
+    호출하므로 fake 스트림도 close() 를 제공하고 호출 여부를 기록한다.
+    """
+
+    def __init__(self, tokens: list[str | None]) -> None:
+        self._iterator: Iterator[_FakeStreamChunk] = iter(
+            _FakeStreamChunk(token) for token in tokens
+        )
+        self.closed = False
+
+    def __iter__(self) -> _FakeStream:
+        return self
+
+    def __next__(self) -> _FakeStreamChunk:
+        return next(self._iterator)
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class _FakeStreamingClient:
-    """OpenAI client 대체 — chat.completions.create(stream=True) 만 받는 최소 스텁."""
+    """OpenAI client 대체 — chat.completions.create(stream=True) + close() 최소 스텁."""
 
     def __init__(self, *, tokens: list[str | None]) -> None:
         self._tokens = tokens
         self.captured_kwargs: dict[str, Any] | None = None
+        self.stream: _FakeStream | None = None
+        self.closed = False
         self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self._create))
 
-    def _create(self, **kwargs: Any) -> Iterator[_FakeStreamChunk]:
+    def _create(self, **kwargs: Any) -> _FakeStream:
         self.captured_kwargs = kwargs
-        return iter(_FakeStreamChunk(token) for token in self._tokens)
+        self.stream = _FakeStream(self._tokens)
+        return self.stream
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def _install_fake_openai_for_streaming(
@@ -219,3 +255,100 @@ def test_streaming_system_prompt_enforces_marker_rule(
     assert system_message["role"] == "system"
     assert "[#1]" in system_message["content"] or "[#" in system_message["content"]
     assert "plain text" in system_message["content"].lower()
+
+
+# --- 2026-06-10 코드 리뷰(A7): try/finally 자원 정리 ---
+
+
+def test_streaming_closes_stream_and_client_on_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """정상 소진 시 finally 가 stream.close() + client.close() 를 호출한다(A7)."""
+    client = _FakeStreamingClient(tokens=["답변", "[#1]"])
+    _install_fake_openai_for_streaming(monkeypatch, client)
+
+    tokens = list(
+        stream_openai_answer(
+            api_key="sk-test",
+            model="gpt-4o",
+            temperature=0.2,
+            timeout_seconds=45,
+            query="질문",
+            top_chunks=[_make_chunk()],
+        )
+    )
+    assert [t.text for t in tokens] == ["답변", "[#1]"]
+    assert client.stream is not None
+    assert client.stream.closed is True
+    assert client.closed is True
+
+
+def test_streaming_closes_resources_on_early_generator_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """클라이언트 중도 disconnect 상당 — generator.close()(GeneratorExit) 경로에서도
+    stream/client 가 정리된다(A7 — 커넥션 누수 방지)."""
+    client = _FakeStreamingClient(tokens=["첫", "둘", "셋"])
+    _install_fake_openai_for_streaming(monkeypatch, client)
+
+    generator = stream_openai_answer(
+        api_key="sk-test",
+        model="gpt-4o",
+        temperature=0.2,
+        timeout_seconds=45,
+        query="질문",
+        top_chunks=[_make_chunk()],
+    )
+    assert next(generator).text == "첫"
+    generator.close()  # 중도 종료 — finally 경로 강제.
+    assert client.stream is not None
+    assert client.stream.closed is True
+    assert client.closed is True
+
+
+# --- 2026-06-10 코드 리뷰(P2-7): conservative_guard 토글 ---
+
+
+def test_conservative_guard_appends_streaming_guard_to_system_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """conservative_guard=True → STREAMING_CONSERVATIVE_GUARD 가 system prompt 끝에 덧붙는다."""
+    client = _FakeStreamingClient(tokens=["ok"])
+    _install_fake_openai_for_streaming(monkeypatch, client)
+
+    list(
+        stream_openai_answer(
+            api_key="sk-test",
+            model="gpt-4o",
+            temperature=0.2,
+            timeout_seconds=45,
+            query="질문",
+            top_chunks=[_make_chunk()],
+            conservative_guard=True,
+        )
+    )
+    assert client.captured_kwargs is not None
+    system_content = client.captured_kwargs["messages"][0]["content"]
+    assert system_content.endswith(STREAMING_CONSERVATIVE_GUARD)
+    # 기본 프롬프트는 약화되지 않는다 — 마커 규칙 지시문이 그대로 선행한다.
+    assert "[#1]" in system_content
+
+
+def test_conservative_guard_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """기본(conservative_guard 미지정) 호출은 보수 지침을 덧붙이지 않는다(기존 동작 보존)."""
+    client = _FakeStreamingClient(tokens=["ok"])
+    _install_fake_openai_for_streaming(monkeypatch, client)
+
+    list(
+        stream_openai_answer(
+            api_key="sk-test",
+            model="gpt-4o",
+            temperature=0.2,
+            timeout_seconds=45,
+            query="질문",
+            top_chunks=[_make_chunk()],
+        )
+    )
+    assert client.captured_kwargs is not None
+    system_content = client.captured_kwargs["messages"][0]["content"]
+    assert "보수성 강화 지침" not in system_content

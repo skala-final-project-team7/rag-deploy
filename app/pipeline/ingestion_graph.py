@@ -18,6 +18,11 @@
     기본값 교체. app/ingestion/document_analyzer.py(featureI-4b 백포트) + space_doc_type_cache
     를 wiring. PoC 는 결정론 Fake 분류기(OPERATION), 운영은 build_real_ingestion_deps 가
     OpenAI 분류기 + MySQL 캐시 주입. document_analyzer_stub 은 stubs.py 에 회귀 보호용 보존.
+  - 2026-06-10, 코드 리뷰 재점검(P2-8·P4) — (1) **INVALID_ACL 게이트 구현**: analyze
+    노드가 ``page.is_acl_missing`` 페이지를 INVALID_ACL 로 기록하고 조건부 엣지로
+    chunk/upsert 를 건너뛴다(page_object.py·app/CLAUDE.md 의 기존 약속을 코드로 이행).
+    (2) 암호화 첨부 분기 이식: 첨부 청킹 ValueError 가 ATTACH_ENCRYPTED 표식을 담으면
+    UNSUPPORTED_ATTACH_TYPE 대신 ATTACH_ENCRYPTED 로 기록(ingestion chunking_worker 정합).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, LangGraph 0.2.x
@@ -152,11 +157,28 @@ def build_ingestion_graph(deps: IngestionGraphDeps) -> Any:
     builder.add_node("embed_upsert", partial(_embed_upsert_node, deps=deps))
 
     builder.set_entry_point("analyze_document")
-    builder.add_edge("analyze_document", "chunk_documents")
+    # P2-8 — INVALID_ACL 게이트. ACL 누락 페이지는 색인에서 제외한다는 기존 약속
+    # (app/schemas/page_object.py·app/CLAUDE.md)을 조건부 엣지로 이행: analyze 가
+    # INVALID_ACL 로 표시한 페이지는 chunk/upsert 를 건너뛰고 즉시 종료한다.
+    builder.add_conditional_edges(
+        "analyze_document",
+        _route_after_analyze,
+        {"skip_indexing": END, "continue": "chunk_documents"},
+    )
     builder.add_edge("chunk_documents", "embed_upsert")
     builder.add_edge("embed_upsert", END)
 
     return builder.compile()
+
+
+def _route_after_analyze(state: Any) -> str:
+    """analyze 직후 분기 — INVALID_ACL 이면 색인 단계를 건너뛴다(P2-8 게이트).
+
+    LangGraph 가 state 를 Pydantic 모델 또는 dict 로 전달하는 두 경우를 모두 다룬다.
+    ``IngestionStatus`` 는 StrEnum 이라 dict 경로의 문자열 값과도 동등 비교된다.
+    """
+    status = state.status if hasattr(state, "status") else state.get("status")
+    return "skip_indexing" if status == IngestionStatus.INVALID_ACL else "continue"
 
 
 def run_ingestion(state: IngestionState, *, graph: Any) -> IngestionState:
@@ -181,8 +203,30 @@ def run_ingestion(state: IngestionState, *, graph: Any) -> IngestionState:
 
 
 def _analyze_document_node(state: IngestionState, *, deps: IngestionGraphDeps) -> IngestionState:
-    """ANALYZE stage — Agent stub 호출 후 페이지 단위 잡 기록."""
+    """ANALYZE stage — Agent stub 호출 후 페이지 단위 잡 기록.
+
+    P2-8 — ``page.is_acl_missing``(allowed_groups·allowed_users 모두 빈 배열) 페이지는
+    INVALID_ACL 로 기록하고 색인 대상에서 제외한다(조건부 엣지 ``_route_after_analyze``
+    가 chunk/upsert 를 건너뜀). 보안상 ACL 없는 문서가 검색 노출되는 것보다 누락이
+    안전하다(fail-closed).
+    """
     started = datetime.now(UTC)
+    if state.page.is_acl_missing:
+        state.stage = IngestionStage.ANALYZE
+        state.status = IngestionStatus.INVALID_ACL
+        deps.jobs.record(
+            IngestionJobRecord(
+                page_id=state.page.page_id,
+                attachment_id=None,
+                stage=IngestionStage.ANALYZE,
+                status=IngestionStatus.INVALID_ACL,
+                started_at=started,
+                finished_at=datetime.now(UTC),
+                error="allowed_groups/allowed_users 모두 비어 있음 — 색인 제외(P2-8 게이트)",
+            )
+        )
+        return state
+
     state = deps.document_analyzer_node(state)
     state.stage = IngestionStage.ANALYZE
     state.status = IngestionStatus.SUCCESS
@@ -268,13 +312,19 @@ def _process_attachment(
         )
         return list(chunks)
     except ValueError as exc:
-        # 미지원·암호화 PDF 등 알 수 없는 attachment_type 의 ValueError — 잡 기록 후 본문은 정상.
+        # 미지원·암호화 PDF 등 ValueError — 잡 기록 후 본문은 정상. 암호화 PDF 는
+        # ATTACH_ENCRYPTED 로 구분 기록한다(ingestion chunking_worker 와 동일 매핑 — P4).
+        status = (
+            IngestionStatus.ATTACH_ENCRYPTED
+            if "ATTACH_ENCRYPTED" in str(exc)
+            else IngestionStatus.UNSUPPORTED_ATTACH_TYPE
+        )
         deps.jobs.record(
             IngestionJobRecord(
                 page_id=page.page_id,
                 attachment_id=attachment.attachment_id,
                 stage=IngestionStage.CHUNK,
-                status=IngestionStatus.UNSUPPORTED_ATTACH_TYPE,
+                status=status,
                 started_at=chunk_started,
                 finished_at=datetime.now(UTC),
                 error=str(exc),

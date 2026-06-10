@@ -13,7 +13,10 @@ PACKAGES = [
     "app.llm",
     "app.ingestion",
     "app.ingestion.chunker",
+    "app.ingestion.embedder",
     "app.query",
+    "app.query.reranker",
+    "app.storage",
     "app.pipeline",
     "app.api",
 ]

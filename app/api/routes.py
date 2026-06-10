@@ -43,16 +43,23 @@
     (1) ``stream`` 기본값 True → **False**(§2-1 표 "기본 false, BFF 는 항상 true"). (2)
     ``history[].role`` 정규화 UPPER → **lowercase**(``user``/``assistant`` — Enum 정책의 명시적
     예외, boundary 변환 없음 — `app/schemas/rag_state.py`).
+  - 2026-06-10, 코드 리뷰 재점검(A1·A14·A15·P2-7) 반영 — (1) 그래프 invoke/OpenAI
+    streaming/검증/제목 생성 등 동기 블로킹 호출을 ``asyncio.to_thread`` 로 오프로드
+    (이벤트 루프 비차단 — 동시 SSE/healthz/keep-alive 보호). (2) 비-streaming 경로에도
+    ``status`` 이벤트 송신(스펙 §1-1 불변식 #1). (3) SSE ``error.message`` 를 errorCode 별
+    고정 안내 문구로 통일(내부 예외 원문은 서버 로그 전용). (4) 보수 가드 토글을
+    streaming 경로에도 전달(``openai_streaming`` 의 plain-text 정합 가드).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, FastAPI 0.111+, sse-starlette 2.1+
 --------------------------------------------------
 """
 
+import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable, Iterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -132,6 +139,45 @@ def _error_event(code: ErrorCode, message: str) -> dict[str, str]:
     """
     payload = {"errorCode": code.value, "message": message}
     return {"event": "error", "data": json.dumps(payload, ensure_ascii=False)}
+
+
+# SSE error.message 는 사용자 노출용 고정 안내 문구만 보낸다(BFF→FE passthrough — §2-1).
+# 내부 예외 원문(상류 응답 본문·내부 URL·request-id 등 포함 가능)은 서버 로그 전용.
+_ERROR_MESSAGES: dict[ErrorCode, str] = {
+    ErrorCode.ML_SERVER_ERROR: "답변 생성 중 오류가 발생했습니다",
+    ErrorCode.ML_TIMEOUT: "답변 생성이 제한 시간 내에 완료되지 않았습니다",
+    ErrorCode.ML_CONNECTION_ERROR: "답변 생성 서비스에 연결하지 못했습니다",
+}
+
+
+def _error_event_for(exc: Exception) -> dict[str, str]:
+    """예외 → 분류된 errorCode + 고정 안내 문구의 SSE ``error`` 이벤트."""
+    code = _classify_ml_error(exc)
+    return _error_event(code, _ERROR_MESSAGES[code])
+
+
+async def _iter_offloaded(iterable: Iterable[Any]) -> AsyncIterator[Any]:
+    """동기 iterator 를 worker thread 에서 한 항목씩 소비하는 비동기 어댑터.
+
+    OpenAI streaming 처럼 항목마다 네트워크 대기가 있는 동기 iterator 를 async
+    제너레이터 안에서 직접 ``for`` 로 돌리면 이벤트 루프가 차단된다(코드 리뷰 A1).
+    ``next()`` 호출을 ``asyncio.to_thread`` 로 오프로드해 대기 중에도 다른 코루틴
+    (다른 SSE 스트림·healthz·keep-alive ping)이 진행되게 한다. 클라이언트 중도
+    disconnect(GeneratorExit) 시에도 finally 에서 원본 iterator 를 close 해
+    업스트림 자원(HTTP 스트림)을 정리한다.
+    """
+    iterator: Iterator[Any] = iter(iterable)
+    sentinel = object()
+    try:
+        while True:
+            item = await asyncio.to_thread(next, iterator, sentinel)
+            if item is sentinel:
+                return
+            yield item
+    finally:
+        close = getattr(iterator, "close", None)
+        if close is not None:
+            await asyncio.to_thread(close)
 
 
 def _classify_ml_error(exc: Exception) -> ErrorCode:
@@ -228,20 +274,36 @@ async def _non_streaming_event_stream(
 
     그래프/상류 예외는 HTTP 에러가 아니라 SSE ``error`` 이벤트로 전달하고 종료한다
     (api-spec v2.2.0 §1-1 오류 처리 정합 — errorCode 는 ML_* 3종으로 분류).
+    스펙 §1-1 불변식 #1(phase 진입 시 status 1회) 정합 — 단일 invoke 구조라 그래프
+    내부 단계를 개별 추적하지 않고 connecting/acl_filtering/searching 을 invoke 직전,
+    formatting 을 직후에 송신한다(streaming 경로의 "단일 phase 통합" 절충과 동일).
     """
+    yield _status_event("connecting")
+    yield _status_event("acl_filtering")
+    yield _status_event("searching")
     try:
-        response = run_query(state, graph=graph)
-    except ACLViolationError as exc:
+        # run_query 는 검색·생성·검증까지 수행하는 동기 블로킹 호출 — 이벤트 루프를
+        # 막지 않도록 worker thread 로 오프로드한다(코드 리뷰 A1).
+        response = await asyncio.to_thread(run_query, state, graph=graph)
+    except ACLViolationError:
         # 시스템 단 안전망 — build_acl_filter는 항상 유효 필터를 만들므로 정상 흐름에선
         # 도달하지 않지만, 그래프 내부 버그/우회 시 ACL 위반이 표면화되어야 한다.
-        yield _error_event(ErrorCode.ML_SERVER_ERROR, f"ACL 시스템 오류: {exc}")
+        # 내부 상세는 로그 전용 — 클라이언트에는 고정 문구만 보낸다(코드 리뷰 A15).
+        _LOGGER.exception("ACL violation surfaced in non-streaming query")
+        yield _error_event(
+            ErrorCode.ML_SERVER_ERROR, "접근 권한 처리 중 오류가 발생했습니다"
+        )
         return
     except Exception as exc:  # noqa: BLE001 — 상류 LLM/네트워크 예외 광범위 캐치 (PoC)
         _LOGGER.exception("non-streaming query failed")
-        yield _error_event(_classify_ml_error(exc), str(exc))
+        yield _error_event_for(exc)
         return
+    yield _status_event("formatting")
     # meta.title — 답변 산출 후 제목 생성(실패 시 fallback). api-spec §1-1 Required: N.
-    response.title = _resolve_title(request, question=state.query, answer=response.answer or "")
+    # 제목 생성도 OpenAI 동기 호출(최대 10s) — 동일하게 오프로드.
+    response.title = await asyncio.to_thread(
+        _resolve_title, request, question=state.query, answer=response.answer or ""
+    )
     for event in _sse_payload(response):
         yield event
 
@@ -264,6 +326,9 @@ def _should_fallback_to_non_streaming(request: Request) -> bool:
     fallback 조건 (OR):
       - ``app.state.deps.generator_provider`` 가 None — PoC 경로는 fake provider 자동
         주입이라 OpenAI streaming 호출 자체가 불가능.
+      - ``app.state.deps.generator_config`` 가 None — streaming 분기가 모델/온도/타임아웃을
+        generator_config 에서 읽으므로 없으면 streaming 진입 불가(외부 사용자 정의
+        generator_node 만 주입한 경우).
       - ``app.state.settings.openai_api_key`` 가 빈 SecretStr — 키 없이는 호출 실패.
 
     Returns:
@@ -271,6 +336,8 @@ def _should_fallback_to_non_streaming(request: Request) -> bool:
     """
     deps = getattr(request.app.state, "deps", None)
     if deps is None or getattr(deps, "generator_provider", None) is None:
+        return True
+    if getattr(deps, "generator_config", None) is None:
         return True
     settings = getattr(request.app.state, "settings", None)
     if settings is None:
@@ -282,8 +349,9 @@ def _should_fallback_to_non_streaming(request: Request) -> bool:
 # feature19 — SSE 진행 표시용 ``status`` 이벤트.
 # 핵심 이벤트(token/sources/verification/done)와 별개로, RAG 라이프사이클 단계 진입 시
 # 진행 phase 를 1회 push 한다. status 를 무시하는 클라이언트도 그대로 동작한다(추가 전용).
-# streaming 경로(``_streaming_event_stream``)에만 적용하며, 비-streaming 경로는 단일
-# 블로킹 invoke 후 모든 이벤트를 한꺼번에 flush 해 phase 가 동시에 발사되므로 적용하지 않는다.
+# streaming/비-streaming 양 경로 모두 송신한다(스펙 §1-1 불변식 #1 — 코드 리뷰 A14).
+# 비-streaming 은 단일 invoke 구조라 connecting/acl_filtering/searching → (invoke) →
+# formatting 의 4종으로 축약 송신한다(그래프 내부 단계 미추적 절충).
 # done/error 는 핵심 done 이벤트 + SSE error 이벤트로 표현하며 status 로는 만들지 않는다.
 _STATUS_MESSAGES: dict[str, str] = {
     "connecting": "연결 중이에요",
@@ -316,8 +384,9 @@ async def _streaming_event_stream(
         async for event in _streaming_event_stream_inner(request=request, state=state):
             yield event
     except Exception as exc:  # noqa: BLE001 — 상류 LLM/네트워크 예외 광범위 캐치 (PoC)
+        # 내부 예외 원문은 로그 전용 — 클라이언트에는 분류된 errorCode + 고정 문구만(A15).
         _LOGGER.exception("streaming query failed")
-        yield _error_event(_classify_ml_error(exc), str(exc))
+        yield _error_event_for(exc)
 
 
 async def _streaming_event_stream_inner(
@@ -345,7 +414,9 @@ async def _streaming_event_stream_inner(
     # feature19 status — searching. 그래프 내부 history/router/search/rerank 4단계를
     # 절충안으로 단일 phase 하나로 통합한다(astream 전환 없이 invoke 직전 1회 송신).
     yield _status_event("searching")
-    result_dict = streaming_graph.invoke(state)
+    # 그래프 invoke 는 임베딩·Qdrant 검색·rerank 까지 수행하는 동기 블로킹 호출 —
+    # worker thread 로 오프로드해 이벤트 루프를 보호한다(코드 리뷰 A1).
+    result_dict = await asyncio.to_thread(streaming_graph.invoke, state)
     rerank_state = RagState.model_validate(result_dict)
 
     intent = rerank_state.intent or Intent.OPERATION_GUIDE
@@ -367,7 +438,9 @@ async def _streaming_event_stream_inner(
             latency_ms=int(elapsed_ms),
         )
         # meta.title — 0건 분기도 제목을 채운다(질문 기반). api-spec §1-1 Required: N.
-        response.title = _resolve_title(request, question=state.query, answer=response.answer or "")
+        response.title = await asyncio.to_thread(
+            _resolve_title, request, question=state.query, answer=response.answer or ""
+        )
         for event in _sse_payload(response):
             yield event
         return
@@ -400,19 +473,27 @@ async def _streaming_event_stream_inner(
     # feature19 status — answering. 프롬프트 구성 / stream_openai_answer 호출 직전.
     yield _status_event("answering")
 
+    # P2-7 — 보수 가드 토글을 streaming 경로에도 적용(비-streaming 의
+    # CONSERVATIVE_SYSTEM_GUARD 와 동일 취지, plain-text 계약 정합 문구).
+    conservative_guard = bool(settings.generator_conservative_guard)
+
     accumulated_tokens: list[str] = []
     used_model = primary_model
     # feature19 status — streaming. 첫 token chunk 송신 직전 1회만 송신(fallback 재시도
     # 시에도 중복 송신하지 않도록 플래그로 한 번만 보낸다).
     streaming_status_sent = False
     try:
-        for token_chunk in stream_openai_answer(
-            api_key=api_key,
-            model=primary_model,
-            temperature=temperature,
-            timeout_seconds=timeout_seconds,
-            query=answer_query,
-            top_chunks=rerank_state.top_chunks,
+        # 동기 OpenAI streaming iterator 는 _iter_offloaded 로 항목별 thread 오프로드(A1).
+        async for token_chunk in _iter_offloaded(
+            stream_openai_answer(
+                api_key=api_key,
+                model=primary_model,
+                temperature=temperature,
+                timeout_seconds=timeout_seconds,
+                query=answer_query,
+                top_chunks=rerank_state.top_chunks,
+                conservative_guard=conservative_guard,
+            )
         ):
             if not streaming_status_sent:
                 yield _status_event("streaming")
@@ -436,13 +517,16 @@ async def _streaming_event_stream_inner(
             accumulated_tokens.clear()
             yield _token_event("")
         used_model = fallback_model
-        for token_chunk in stream_openai_answer(
-            api_key=api_key,
-            model=fallback_model,
-            temperature=temperature,
-            timeout_seconds=timeout_seconds,
-            query=answer_query,
-            top_chunks=rerank_state.top_chunks,
+        async for token_chunk in _iter_offloaded(
+            stream_openai_answer(
+                api_key=api_key,
+                model=fallback_model,
+                temperature=temperature,
+                timeout_seconds=timeout_seconds,
+                query=answer_query,
+                top_chunks=rerank_state.top_chunks,
+                conservative_guard=conservative_guard,
+            )
         ):
             if not streaming_status_sent:
                 yield _status_event("streaming")
@@ -460,7 +544,10 @@ async def _streaming_event_stream_inner(
     # 수 있는지 먼저 판정한 뒤, 대체 token 을 verifying status 송신보다 앞서 내보낸다.
     # status 는 진행 표시용이라 실제 검증 연산 직후에 보내도 무방하다(검색 4단계도 단일
     # ``searching`` phase 로 묶어 송신하는 것과 동일한 절충).
-    verify_pipeline_node(rerank_state, llm_evaluator=deps.verify_llm_evaluator)
+    # 검증 2단계는 OpenAI evaluator 동기 호출을 포함 — 동일하게 오프로드(A1).
+    await asyncio.to_thread(
+        verify_pipeline_node, rerank_state, llm_evaluator=deps.verify_llm_evaluator
+    )
 
     elapsed_ms = (time.perf_counter_ns() - started) // 1_000_000
     response = format_response(
@@ -472,7 +559,9 @@ async def _streaming_event_stream_inner(
         latency_ms=int(elapsed_ms),
     )
     # meta.title — 스트리밍된 실제 답변을 맥락으로 제목 생성. api-spec §1-1 Required: N.
-    response.title = _resolve_title(request, question=state.query, answer=answer)
+    response.title = await asyncio.to_thread(
+        _resolve_title, request, question=state.query, answer=answer
+    )
     # 답변이 차단 분기(BLOCKED_ANSWER_MESSAGE)로 대체된 경우, UI 가 이미 송신된 원본
     # 토큰을 차단 메시지로 덮어쓰도록 'token' 이벤트를 1회 더 송신한다. 불변식 #2 준수를
     # 위해 verifying/formatting status 보다 **먼저** 보낸다.

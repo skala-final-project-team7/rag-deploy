@@ -274,6 +274,10 @@ def test_source_field_mapping_for_page_chunk() -> None:
     assert src.source_type is SourceType.PAGE
     assert src.confluence_url == "/display/CLOUD/eks"  # webui_link
     assert src.text_preview == "본문 텍스트"
+    # sources[].pageId — metadata.page_id 주입(2026-06-10, 코드 리뷰 A8). 누락 시
+    # 기본값 "" 이 BFF 로 그대로 송신되므로 빈 문자열이 아니어야 한다.
+    assert src.page_id == "P1"
+    assert src.to_bff_payload()["pageId"] == "P1"
     assert src.attachment_filename is None
     assert src.attachment_mime is None
     assert src.download_url is None
@@ -313,6 +317,8 @@ def test_source_field_mapping_for_attachment_chunk() -> None:
     assert src.source_type is SourceType.ATTACHMENT
     assert src.attachment_filename == "EKS_운영_매뉴얼.docx"
     assert src.attachment_mime == _DOCX_MIME
+    # 첨부 청크도 pageId(부모 페이지)가 주입된다(코드 리뷰 A8).
+    assert src.page_id == "P1"
 
 
 def test_attachment_source_download_url_filled_from_lookup() -> None:

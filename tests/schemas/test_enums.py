@@ -59,10 +59,12 @@ def test_ingestion_stage_values() -> None:
 def test_ingestion_status_includes_exception_codes() -> None:
     values = {s.value for s in IngestionStatus}
     assert "SUCCESS" in values
-    # chunking-strategy.md §8 예외 상태 코드
+    # chunking-strategy.md §8 예외 상태 코드 (+ EMPTY_BODY_ATTACH_ONLY,
+    # ATTACH_DOWNLOAD_FAILED — FR-002 후속·코드 리뷰 A4, ingestion 레포와 미러 유지)
     for code in (
         "PARTIAL_PARSE",
         "EMPTY_BODY",
+        "EMPTY_BODY_ATTACH_ONLY",
         "INVALID_ACL",
         "UNSUPPORTED_ATTACH_TYPE",
         "ATTACH_ENCRYPTED",
@@ -70,6 +72,7 @@ def test_ingestion_status_includes_exception_codes() -> None:
         "ATTACH_NO_HEADER",
         "OVERSIZE_ATOMIC",
         "TOKENIZER_FAIL",
+        "ATTACH_DOWNLOAD_FAILED",
     ):
         assert code in values
 

@@ -477,6 +477,8 @@ def _agent_sources_to_rag_sources(
                 attachment_filename=metadata.attachment_filename,
                 attachment_mime=metadata.attachment_mime,
                 download_url=None,
+                # sources[].pageId — BFF 영속 필드. 기본값("") 송신 방지(코드 리뷰 A8).
+                page_id=metadata.page_id,
             )
         )
     return sources

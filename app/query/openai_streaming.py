@@ -13,6 +13,10 @@
 변경사항 내역 (날짜, 변경목적, 변경내용 순)
   - 2026-05-19, 최초 작성, (A) Hybrid streaming — plain text + [#N] 마커 prompt
     + OpenAI streaming generator.
+  - 2026-06-10, 코드 리뷰 재점검(A7·P2-7) 반영 — (1) try/finally 로 stream/client
+    종료 보장(클라이언트 중도 disconnect 시 자원 누수 방지). (2) ``conservative_guard``
+    파라미터 추가 — RAG_GENERATOR_CONSERVATIVE_GUARD 토글이 streaming 경로에도
+    적용되도록 plain-text 계약 정합 보수 지침을 system prompt 에 덧붙인다.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, openai>=1.30.
@@ -38,6 +42,21 @@ _STREAMING_SYSTEM_PROMPT = (
     "여러 청크를 동시에 인용할 때는 [#1][#2] 처럼 이어 붙이세요.\n"
     "컨텍스트에 없는 사실은 단정하지 말고 '확인할 수 없습니다' 로 표시하세요.\n"
     "출력은 자연어 plain text 만 사용하고 JSON 이나 코드 블록으로 감싸지 마세요."
+)
+
+# P2-7 — 보수성 강화 지침 (streaming / plain-text 계약 정합판).
+# 비-streaming 경로의 ``openai_transport.CONSERVATIVE_SYSTEM_GUARD`` 와 동일 취지이나,
+# 그쪽은 JSON contract(context_id / unsupported_gaps) 용어를 쓰므로 본 plain-text +
+# ``[#N]`` 마커 계약에 맞게 다시 썼다. settings.generator_conservative_guard=True 일 때만
+# system prompt 끝에 덧붙인다(기본 OFF — 기본 프롬프트를 약화하지 않고 강화만).
+STREAMING_CONSERVATIVE_GUARD = "\n".join(
+    [
+        "[보수성 강화 지침]",
+        "- 각 문장은 인용한 [#N] 청크의 내용에 명시적으로 등장하는 사실만 진술한다.",
+        "- 컨텍스트에 없는 추론·일반 지식·배경 설명·권고를 답변 문장으로 추가하지 않는다.",
+        "- 추측성 표현(아마도, ~일 수 있다, 일반적으로)을 사용하지 않는다.",
+        "- 정확한 [#N] 인용을 달 수 없는 문장은 출력하지 않는다.",
+    ]
 )
 
 
@@ -77,12 +96,14 @@ def stream_openai_answer(
     timeout_seconds: int,
     query: str,
     top_chunks: list[Chunk],
+    conservative_guard: bool = False,
 ) -> Iterator[StreamingTokenChunk]:
     """OpenAI Chat Completions streaming 으로 답변 토큰을 yield 한다.
 
     설계서 §4.6.4 정합 — 첫 토큰부터 사용자에게 즉시 송신 가능하도록 OpenAI 의
-    ``stream=True`` 모드를 사용한다. 본 generator 는 동기 (sync) iterator 이므로
-    SSE 라우트는 별도 async wrapping 없이 ``for chunk in iterator`` 로 소비 가능.
+    ``stream=True`` 모드를 사용한다. 본 generator 는 동기 (sync) iterator 다 —
+    async 컨텍스트(SSE 라우트)에서 직접 ``for`` 로 돌리면 이벤트 루프가 차단되므로
+    호출자는 ``routes._iter_offloaded`` 같은 thread 오프로드 어댑터로 소비한다(A1).
 
     Args:
         api_key: OpenAI API key (외부 주입).
@@ -91,6 +112,8 @@ def stream_openai_answer(
         timeout_seconds: 호출 타임아웃 (초).
         query: 사용자 질문.
         top_chunks: 검색·재순위화 결과 Top-K 청크.
+        conservative_guard: True 면 ``STREAMING_CONSERVATIVE_GUARD`` 를 system
+            prompt 끝에 덧붙인다(RAG_GENERATOR_CONSERVATIVE_GUARD 토글 — P2-7).
 
     Yields:
         ``StreamingTokenChunk`` — 단일 토큰 또는 토큰 조각 (OpenAI delta).
@@ -105,21 +128,33 @@ def stream_openai_answer(
     # lazy import — openai 없는 환경에서도 모듈 import 가 깨지지 않게.
     from openai import OpenAI
 
+    system_prompt = _STREAMING_SYSTEM_PROMPT
+    if conservative_guard:
+        system_prompt = f"{system_prompt}\n\n{STREAMING_CONSERVATIVE_GUARD}"
+
     client = OpenAI(api_key=api_key, timeout=float(timeout_seconds))
-    user_prompt = build_streaming_user_prompt(query=query, top_chunks=top_chunks)
-    stream = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": _STREAMING_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=temperature,
-        stream=True,
-    )
-    for raw_chunk in stream:
-        delta = _extract_delta_content(raw_chunk)
-        if delta:
-            yield StreamingTokenChunk(text=delta)
+    # try/finally — 정상 종료·중도 close(GeneratorExit)·상류 예외 모든 경로에서
+    # stream 과 client 의 커넥션을 정리한다(A7 — 호출마다 생성하는 구조의 누수 방지).
+    try:
+        user_prompt = build_streaming_user_prompt(query=query, top_chunks=top_chunks)
+        stream = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+            stream=True,
+        )
+        try:
+            for raw_chunk in stream:
+                delta = _extract_delta_content(raw_chunk)
+                if delta:
+                    yield StreamingTokenChunk(text=delta)
+        finally:
+            stream.close()
+    finally:
+        client.close()
 
 
 def _extract_delta_content(raw_chunk: Any) -> str:
@@ -134,6 +169,7 @@ def _extract_delta_content(raw_chunk: Any) -> str:
 
 
 __all__ = [
+    "STREAMING_CONSERVATIVE_GUARD",
     "StreamingTokenChunk",
     "build_streaming_user_prompt",
     "stream_openai_answer",

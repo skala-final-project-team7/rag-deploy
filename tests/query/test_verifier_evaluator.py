@@ -16,6 +16,7 @@ from answer_verification_agent.evaluator.providers import (
     EvaluatorProviderError,
     FakeEvaluatorProvider,
 )
+from app.metrics import verifier_provider_failure_total
 from app.query.verifier import SentenceCheck
 from app.query.verifier_evaluator import manage_verifier_evaluator
 from app.schemas.chunk import Chunk, ChunkMetadata
@@ -239,8 +240,9 @@ class _FailingProvider:
 
 def test_provider_failure_falls_back_to_supported() -> None:
     # provider 가 EvaluatorProviderError 를 던지면 stub 정합 SUPPORTED 로 흡수.
-    # 환각 차단 대신 stub 의 기본 동작(모두 SUPPORTED)을 유지 — provider 실패 자체는
-    # 호출자(verify_pipeline_node)가 alert 로 별도 처리.
+    # 2026-06-10(코드 리뷰 A6) — fail-open 이 조용히 지나가지 않도록 본 어댑터가 직접
+    # warning 로그 + verifier_provider_failure_total 메트릭으로 관측한다(문장 1건당 +1).
+    before = verifier_provider_failure_total._value.get()
     result = manage_verifier_evaluator(
         answer="...",
         top_chunks=[_make_chunk()],
@@ -249,6 +251,48 @@ def test_provider_failure_falls_back_to_supported() -> None:
     )
     assert len(result) == 1
     assert result[0].status is VerificationStatus.SUPPORTED
+    # 메트릭 카운터 증가 — 환각 게이트 비활성 빈도 관측 지점(A6).
+    assert verifier_provider_failure_total._value.get() == before + 1
+
+
+def test_provider_failure_metric_counts_each_failed_sentence() -> None:
+    """다중 의심 문장 실패 — 문장 단위로 카운터가 증가한다(A6 관측 정밀도)."""
+    before = verifier_provider_failure_total._value.get()
+    result = manage_verifier_evaluator(
+        answer="...",
+        top_chunks=[_make_chunk()],
+        suspicious_sentences=[
+            _check(sentence_id=1, sentence="문장 1"),
+            _check(sentence_id=2, sentence="문장 2"),
+        ],
+        provider=_FailingProvider(),
+    )
+    assert [v.status for v in result] == [
+        VerificationStatus.SUPPORTED,
+        VerificationStatus.SUPPORTED,
+    ]
+    assert verifier_provider_failure_total._value.get() == before + 2
+
+
+def test_provider_success_does_not_touch_failure_metric() -> None:
+    """정상 평가 경로는 실패 카운터를 증가시키지 않는다(false alert 방지)."""
+    before = verifier_provider_failure_total._value.get()
+    manage_verifier_evaluator(
+        answer="...",
+        top_chunks=[_make_chunk()],
+        suspicious_sentences=[_check()],
+        provider=FakeEvaluatorProvider(
+            scripted_results={
+                "s1": {
+                    "label": "SUPPORTED",
+                    "score": 0.9,
+                    "reason": "ok",
+                    "unsupported_claims": [],
+                }
+            }
+        ),
+    )
+    assert verifier_provider_failure_total._value.get() == before
 
 
 # --- top_chunks 비었을 때 ---
