@@ -33,6 +33,7 @@
     (D)(E)는 agent 패키지 담당으로 이관 유지.
   - 2026-06-10, 코드 리뷰 재점검(A8) — Source 생성 시 page_id=metadata.page_id 주입
     (sources[].pageId 빈 문자열 송신 방지 — BFF 영속 필드).
+  - 2026-06-10, A8 잔여 — Source 에 space_id/space_name 주입(rerank_node 와 동일).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, Pydantic 2.7+
@@ -473,6 +474,8 @@ def _agent_sources_to_rag_sources(
                 score=score_int,
                 path=metadata.section_path or metadata.page_title,
                 space_key=metadata.space_key,
+                space_id=metadata.space_id,
+                space_name=metadata.space_name,
                 source_type=source_type,
                 confluence_url=metadata.webui_link,
                 last_modified=metadata.last_modified,

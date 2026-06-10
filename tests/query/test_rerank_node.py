@@ -42,6 +42,8 @@ def _chunk(
         labels=["eks", "운영"],
         doc_type="operation",
         space_key="CLOUD",
+        space_id="SP-100",
+        space_name="Cloud Platform",
         allowed_groups=["space:CLOUD"],
         allowed_users=[],
         webui_link="/display/CLOUD/eks",
@@ -278,6 +280,9 @@ def test_source_field_mapping_for_page_chunk() -> None:
     # 기본값 "" 이 BFF 로 그대로 송신되므로 빈 문자열이 아니어야 한다.
     assert src.page_id == "P1"
     assert src.to_bff_payload()["pageId"] == "P1"
+    # sources[].spaceId/spaceName — A8 잔여 해소(2026-06-10): metadata 원천 주입.
+    assert src.to_bff_payload()["spaceId"] == "SP-100"
+    assert src.to_bff_payload()["spaceName"] == "Cloud Platform"
     assert src.attachment_filename is None
     assert src.attachment_mime is None
     assert src.download_url is None

@@ -14,6 +14,8 @@
     Source.download_url을 채우도록 확장. lookup이 None이면 동작 무변경.
   - 2026-06-10, 코드 리뷰 재점검(A8·P4) — Source 생성 시 page_id 주입(BFF 영속 필드) +
     LOW_CONFIDENCE_SCORE 낡은 주석(20→55) 정정.
+  - 2026-06-10, A8 잔여 — Source 에 space_id/space_name 주입(sources[].spaceId/spaceName
+    — BFF MessageSource 영속 필드 채움 완료).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x
@@ -188,6 +190,8 @@ def _chunk_to_source(
         score=round(raw_score * 100),
         path=metadata.section_path,
         space_key=metadata.space_key,
+        space_id=metadata.space_id,
+        space_name=metadata.space_name,
         source_type=metadata.source_type,
         confluence_url=metadata.webui_link,
         last_modified=metadata.last_modified,

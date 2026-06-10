@@ -12,6 +12,7 @@
     청커가 직접 열 로컬 경로는 local_path 필드에 분리 매핑 (ADR-2026-001)
   - 2026-06-10, 코드 리뷰 재점검(P1-3) — 첨부 docstring 정합: extracted_text 는 빈 값 유지,
     분석기가 빈 텍스트+local_path 를 파일 기반 추출(chunk_attachment)로 위임함을 명시.
+  - 2026-06-10, A8 잔여 — raw["space"].id/name → PageObject.space_id/space_name 매핑.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, Pydantic 2.7+
@@ -124,6 +125,8 @@ class JsonFixtureSourceAdapter(DocumentSourceAdapter):
     def _map_page(self, raw: dict) -> PageObject:
         """Atlassian 페이지 응답(dict) → 표준 PageObject."""
         space_key = raw["space"]["key"]
+        space_id = str(raw["space"].get("id") or "")
+        space_name = str(raw["space"].get("name") or "")
         allowed_groups, allowed_users = self._synthesize_acl(space_key)
         last_modified = parse_atlassian_datetime(raw["version"]["when"])
         labels = [
@@ -133,6 +136,8 @@ class JsonFixtureSourceAdapter(DocumentSourceAdapter):
         return PageObject(
             page_id=raw["id"],
             space_key=space_key,
+            space_id=space_id,
+            space_name=space_name,
             title=raw["title"],
             body_html=raw["body"]["storage"]["value"],
             version_number=raw["version"]["number"],

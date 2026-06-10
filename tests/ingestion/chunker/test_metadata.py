@@ -8,6 +8,8 @@ from app.schemas.page_object import PageObject
 _PAGE = PageObject(
     page_id="CONF-PAGE-1",
     space_key="CLOUD",
+    space_id="SP-100",
+    space_name="Cloud Platform",
     title="EKS 장애 대응 가이드",
     body_html="<h2>증상</h2>",
     version_number=3,
@@ -29,6 +31,9 @@ def test_build_metadata_common_fields() -> None:
     assert meta.chunk_index == 0
     assert meta.doc_type == "incident"
     assert meta.space_key == "CLOUD"
+    # A8 잔여(2026-06-10) — PageObject.space_id/space_name 이 메타로 전파된다.
+    assert meta.space_id == "SP-100"
+    assert meta.space_name == "Cloud Platform"
     assert meta.allowed_groups == ["space:CLOUD"]
     assert meta.labels == ["eks", "장애대응"]
     assert meta.token_count > 0

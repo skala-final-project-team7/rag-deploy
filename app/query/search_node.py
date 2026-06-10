@@ -15,6 +15,8 @@
   - 2026-05-18, 5-A 후속 — _chunk_from_search_hit가 payload.token_count를 그대로
     복원하도록 변경 (build_point_payload 동봉 확장과 짝). legacy 인덱스 호환 위해
     필드 없으면 0 fallback.
+  - 2026-06-10, A8 잔여 — payload→메타 복원에 space_id/space_name 추가(구버전 payload 는
+    .get 폴백으로 빈 문자열 — 재색인 없이 호환).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x
@@ -280,6 +282,9 @@ def _chunk_from_search_hit(hit: SearchHit) -> Chunk:
         labels=list(payload.get("labels") or []),
         doc_type=_parse_doc_type(payload["doc_type"]),
         space_key=str(payload["space_key"]),
+        # A8 잔여(2026-06-10) — 구버전 색인 payload 호환을 위해 .get 폴백.
+        space_id=str(payload.get("space_id") or ""),
+        space_name=str(payload.get("space_name") or ""),
         allowed_groups=list(payload.get("allowed_groups") or []),
         allowed_users=list(payload.get("allowed_users") or []),
         webui_link=str(payload["webui_link"]),
