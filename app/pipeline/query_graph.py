@@ -45,6 +45,13 @@
     를 받아 OpenAI streaming + 검증을 직접 수행하는 흐름 (설계서 §4.6.4).
     기존 build_query_graph 는 무수정 보존 (PoC 600 test 회귀 + non-streaming
     경로 유지).
+  - 2026-06-10, 배포 전 점검 — (1) ``resolve_verify_llm_evaluator(deps)`` 신설:
+    verify 노드의 provider/config/full_context partial 주입 로직을 헬퍼로 추출해
+    스트리밍 라우트(routes.py 의 사후 검증)와 공유한다. 종전에는 스트리밍 경로가
+    ``deps.verify_llm_evaluator`` 기본값(provider 미주입)을 그대로 호출해 운영
+    모드에서도 검증 2단계가 Fake 평가자로 동작했다. (2) ``history_config`` 필드
+    추가 + ``manage_history`` 에 전달 — 운영 모드 히스토리 분류 LLM(provider/모델)
+    주입 seam 완성(라우터·생성기·검증기와 동일 패턴, build_real_deps 배선).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, LangGraph 0.2.x
@@ -84,8 +91,11 @@ from app.schemas.response import QueryResponse
 from app.storage.chunk_lookup import ChunkTextLookup, FakeChunkTextLookup
 from app.storage.qdrant_client import QdrantPoolStore
 
-# history-manager-agent의 LLM provider — runtime 인터페이스 의존성 회피를 위해 Any.
+# history-manager-agent의 LLM provider / config — runtime 인터페이스 의존성 회피를 위해 Any.
+# 실제 타입은 HistoryLLMProvider / HistoryManagerConfig. manage_history 가 None 일 때
+# FakeHistoryLLMProvider + 기본 HistoryManagerConfig 를 사용한다.
 HistoryProvider = Any
+HistoryConfig = Any
 
 # query-routing-agent의 LLM provider / config — runtime 인터페이스 의존성 회피를 위해 Any.
 # 실제 타입은 RoutingLLMProvider / QueryRoutingConfig. manage_router 가 None 일 때 fake
@@ -133,9 +143,12 @@ class QueryGraphDeps:
     # Chunk 풀 텍스트·첨부 download_url lookup (풀 텍스트 lookup 후속, 2026-05-18).
     # 기본값은 빈 FakeChunkTextLookup — 미주입 환경에서도 안전 동작 (download_url=None).
     chunk_lookup: ChunkTextLookup = field(default_factory=FakeChunkTextLookup)
-    # 멀티턴 히스토리 관리자 LLM provider — None이면 manage_history가
-    # FakeHistoryLLMProvider 기본을 사용한다.
+    # 멀티턴 히스토리 관리자 LLM provider / config — None이면 manage_history가
+    # FakeHistoryLLMProvider + 기본 HistoryManagerConfig 를 사용한다. 운영
+    # (build_real_deps)은 OpenAIHistoryLLMProvider + 모델 지정 config 를 주입한다
+    # (config.model 이 LLM 요청의 model 필드가 된다 — agent classify_history 정합).
     history_provider: HistoryProvider | None = None
+    history_config: HistoryConfig | None = None
 
     # 질의 라우터 LLM provider / config — None 이면 manage_router 가
     # FakeRoutingLLMProvider + 기본 QueryRoutingConfig 를 사용한다.
@@ -171,6 +184,25 @@ class QueryGraphDeps:
     verify_llm_evaluator: VerifyEvaluator = field(default=manage_verifier_evaluator)
 
 
+def resolve_verify_llm_evaluator(deps: QueryGraphDeps) -> VerifyEvaluator:
+    """deps 의 verifier provider/config/full_context 를 반영한 검증 2단계 평가자를 돌려준다.
+
+    그래프 ``verify`` 노드와 스트리밍 라우트(routes.py — rerank 이후 사후 검증)가 **동일한**
+    평가자 callable 을 쓰도록 단일 지점에서 해석한다. ``verify_llm_evaluator`` 가 기본값
+    (``manage_verifier_evaluator``)이면 provider/config/full_context 를 partial 로 주입하고
+    (provider=None 이면 종전과 동일하게 Fake 동작 — PoC 경로 불변), 외부에서 주입된 사용자
+    정의 callable 은 이미 provider 가 captured 되어 있다고 가정하고 그대로 반환한다.
+    """
+    if deps.verify_llm_evaluator is manage_verifier_evaluator:
+        return partial(
+            manage_verifier_evaluator,
+            provider=deps.verifier_provider,
+            config=deps.verifier_config,
+            full_context=deps.verifier_full_context,
+        )
+    return deps.verify_llm_evaluator
+
+
 def build_query_graph(deps: QueryGraphDeps) -> Any:
     """Query LangGraph StateGraph를 조립해 컴파일된 그래프를 반환한다.
 
@@ -190,7 +222,14 @@ def build_query_graph(deps: QueryGraphDeps) -> Any:
     # 노드 등록 — 외부 의존성은 functools.partial 로 wiring.
     # NOTE: 노드명은 RagState 필드명과 네임스페이스를 공유한다 (LangGraph 1.x 제약).
     # 히스토리 관리자 노드는 RagState.history 필드와 충돌하므로 'manage_history'로 둔다.
-    builder.add_node("manage_history", partial(manage_history, provider=deps.history_provider))
+    builder.add_node(
+        "manage_history",
+        partial(
+            manage_history,
+            provider=deps.history_provider,
+            history_config=deps.history_config,
+        ),
+    )
     # 라우터 노드는 manage_router 기본값일 때만 routing_provider / routing_config 를
     # functools.partial 로 주입한다. 외부에서 주입된 사용자 정의 router_node 는 이미
     # provider 가 captured 되어 있다고 가정하고 그대로 등록 (history 패턴 정합).
@@ -233,23 +272,11 @@ def build_query_graph(deps: QueryGraphDeps) -> Any:
         )
     else:
         builder.add_node("generate", deps.generator_node)
-    # 검증 2단계 평가자도 manage_verifier_evaluator 기본값일 때만 verifier_provider /
-    # verifier_config 를 functools.partial 로 주입한다 (router/generator 패턴 정합).
-    # 외부 사용자 정의 verify_llm_evaluator 는 captured 가 이미 있다고 가정하고 그대로
-    # 등록.
-    verifier_callable: VerifyEvaluator
-    if deps.verify_llm_evaluator is manage_verifier_evaluator:
-        verifier_callable = partial(
-            manage_verifier_evaluator,
-            provider=deps.verifier_provider,
-            config=deps.verifier_config,
-            full_context=deps.verifier_full_context,
-        )
-    else:
-        verifier_callable = deps.verify_llm_evaluator
+    # 검증 2단계 평가자 — provider/config/full_context 주입은 resolve_verify_llm_evaluator
+    # 가 단일 지점에서 해석한다(스트리밍 라우트의 사후 검증과 동일 callable 공유).
     builder.add_node(
         "verify",
-        partial(verify_pipeline_node, llm_evaluator=verifier_callable),
+        partial(verify_pipeline_node, llm_evaluator=resolve_verify_llm_evaluator(deps)),
     )
 
     # 엣지 — 단일 경로 + 검색 0건 분기.
@@ -297,7 +324,14 @@ def build_query_graph_for_streaming(deps: QueryGraphDeps) -> Any:
     builder = StateGraph(RagState)
 
     # 노드 등록 — build_query_graph 와 동일 wiring. partial 패턴 정합.
-    builder.add_node("manage_history", partial(manage_history, provider=deps.history_provider))
+    builder.add_node(
+        "manage_history",
+        partial(
+            manage_history,
+            provider=deps.history_provider,
+            history_config=deps.history_config,
+        ),
+    )
     if deps.router_node is manage_router:
         builder.add_node(
             "router",

@@ -64,6 +64,11 @@
     를 본 저장소가 만든 4종 의도 정의·예시·구분 기준·출력 schema 강제 prompt
     로 교체해 의도 분류 정확도 보강 (feature16 발견 #2 fix). vendoring 패키지
     무수정 보존 정합.
+  - 2026-06-10, 배포 전 점검 — 히스토리 매니저 agent 의 운영 wiring 누락 보완.
+    build_real_deps 가 OpenAIHistoryLLMProvider + HistoryManagerConfig(model=
+    gpt-4o-mini)를 history_provider/history_config 로 주입한다. 종전에는 라우터·
+    생성기·검증기 3종만 wiring 되어 운영 모드에서도 히스토리 분류가 Fake(항상
+    new_topic)로 동작 — 멀티턴 contextualized question 이 만들어지지 않았다.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, FastAPI 0.111+
@@ -170,6 +175,8 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
     from answer_generation_agent.generation.answer_generation import OpenAIAnswerLLMProvider
     from answer_verification_agent.config import AnswerVerificationConfig
     from answer_verification_agent.evaluator.providers import OpenAIEvaluatorProvider
+    from history_manager_agent.config import HistoryManagerConfig
+    from history_manager_agent.llm import OpenAIHistoryLLMProvider
     from query_routing_agent.config import QueryRoutingConfig
     from query_routing_agent.llm import OpenAIRoutingLLMProvider
 
@@ -202,6 +209,14 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
     # 주입" 정합 — provider 가 ``os.environ.get("OPENAI_API_KEY")`` fallback 을 거치지
     # 않도록 직접 주입한다 (feature12, 2026-05-19).
     openai_api_key = settings.openai_api_key.get_secret_value()
+    # 멀티턴 히스토리 분류기도 운영 모드는 OpenAI provider 를 사용한다(배포 전 점검,
+    # 2026-06-10 — 라우터·생성기·검증기만 wiring 되고 히스토리는 Fake(항상 new_topic)로
+    # 남아 멀티턴 맥락 통합이 운영에서 동작하지 않던 누락 보완). agent 의
+    # ``classify_history`` 는 ``config.model`` 로 LLM 요청을 만들므로 모델을 지정한
+    # config 를 provider 와 함께 QueryGraphDeps 에 주입한다(manage_history 정합).
+    # GPT-4o-mini (보조 모델 — app/CLAUDE.md §5 라우팅 정책, 라우터·검증기와 동일).
+    history_config = HistoryManagerConfig(model="gpt-4o-mini", openai_api_key=openai_api_key)
+    history_provider = OpenAIHistoryLLMProvider(config=history_config, api_key=openai_api_key)
     # 라우터는 운영 모드에서 OpenAI provider 를 사용한다. ``__init__(config, api_key,
     # transport)`` 로 settings 키 + 본 저장소가 보강한 transport 를 직접 주입한다.
     # build_openai_routing_transport 가 4종 의도 정의·예시·구분 기준·출력 schema 를
@@ -257,6 +272,8 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
         store=store,
         reranker=reranker,
         chunk_lookup=chunk_lookup,
+        history_provider=history_provider,
+        history_config=history_config,
         routing_provider=routing_provider,
         routing_config=routing_config,
         verifier_provider=verifier_provider,
@@ -281,9 +298,10 @@ def _ingest_samples(
     URI로 채워둔다. 이 매핑을 indexer 에 전달해 첨부 청크의 chunk_lookup 적재 시점에
     Source.download_url 이 함께 채워지도록 한다.
 
-    본문(chunk_page)뿐 아니라 첨부(chunk_attachment, docx/xlsx)도 적재한다 — 적재
-    누락 시 PoC(Mode A) 데모에서 첨부 활용 질의가 검색 0건이 되던 문제(feature17c-4
-    의 PoC 경로 대응). 미지원 유형(PDF/CSV)·파싱 실패는 적재를 중단하지 않고 건너뛴다.
+    본문(chunk_page)뿐 아니라 첨부(chunk_attachment — pdf/docx/xlsx/csv 4종 지원,
+    feature4 완료)도 적재한다 — 적재 누락 시 PoC(Mode A) 데모에서 첨부 활용 질의가
+    검색 0건이 되던 문제(feature17c-4 의 PoC 경로 대응). 유형 판별·파싱 실패는 적재를
+    중단하지 않고 건너뛴다.
     실 운영 ingestion 그래프(`app/pipeline/ingestion_graph.py`)는 이미 첨부를 청킹한다.
     """
     adapter = JsonFixtureSourceAdapter(samples_dir=samples_dir)

@@ -66,7 +66,7 @@ def main() -> int:
         print(f"[err] eval-set not found: {args.eval_set}")
         return 1
 
-    with args.eval_set.open() as fp:
+    with args.eval_set.open(encoding="utf-8") as fp:
         data = json.load(fp)
     items: list[dict[str, Any]] = data["items"]
 
@@ -116,7 +116,9 @@ def main() -> int:
     shutil.copy(args.eval_set, backup_path)
     print(f"[backfill] 백업 = {backup_path}")
 
-    args.eval_set.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    args.eval_set.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print(f"[backfill] 갱신 완료 = {args.eval_set}")
     return 0
 

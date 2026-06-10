@@ -34,6 +34,7 @@
 --------------------------------------------------
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -64,6 +65,8 @@ from app.storage.jobs import (
 from app.storage.mongo_cache import EmbeddingCache
 from app.storage.qdrant_client import QdrantPoolStore
 from app.storage.space_doc_type_cache import FakeSpaceDocTypeCache
+
+_LOGGER = logging.getLogger(__name__)
 
 # 노드 시그니처 — (IngestionState) -> IngestionState.
 IngestionNode = Callable[[IngestionState], IngestionState]
@@ -328,6 +331,29 @@ def _process_attachment(
                 started_at=chunk_started,
                 finished_at=datetime.now(UTC),
                 error=str(exc),
+            )
+        )
+        return []
+    except Exception as exc:  # noqa: BLE001 — 추출 라이브러리 예외 격리(worker P1-2 정합)
+        # 손상 파일은 openpyxl InvalidFileException / python-docx PackageNotFoundError /
+        # PyMuPDF FileDataError 등 라이브러리 고유 예외(비 ValueError)를 던진다 —
+        # ValueError 만 잡으면 첨부 1건이 페이지 본문·다른 첨부 청크까지 잃게 하므로
+        # 첨부 단위로 격리한다(ingestion chunking_worker 의 동일 분기 이식,
+        # 배포 전 점검 2026-06-10).
+        _LOGGER.warning(
+            "ingestion graph: 첨부 추출 실패로 첨부 단위 격리 — attachment_id=%s",
+            attachment.attachment_id,
+            exc_info=True,
+        )
+        deps.jobs.record(
+            IngestionJobRecord(
+                page_id=page.page_id,
+                attachment_id=attachment.attachment_id,
+                stage=IngestionStage.CHUNK,
+                status=IngestionStatus.UNSUPPORTED_ATTACH_TYPE,
+                started_at=chunk_started,
+                finished_at=datetime.now(UTC),
+                error=f"{type(exc).__name__}: {exc}",
             )
         )
         return []

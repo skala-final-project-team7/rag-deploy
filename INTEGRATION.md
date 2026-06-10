@@ -11,7 +11,7 @@
 ## 2. 에이전트 의존성
 ```toml
 # pyproject.toml [project].dependencies
-"lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@main",
+"lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.0",
 ```
 app은 4개 에이전트를 **top-level 패키지명**으로 import한다(소스 30곳): `query_routing_agent`, `history_manager_agent`, `answer_generation_agent`, `answer_verification_agent`. ai-agent가 이 이름을 그대로 노출하면 import는 **무변경**으로 해결된다.
 
@@ -29,10 +29,14 @@ app은 4개 에이전트를 **top-level 패키지명**으로 import한다(소스
 
 ## 4. 빌드/검증 (Python 3.11)
 ```bash
-pip install -e '.[embedding]'      # ai-agent v0.1.0 의존성 포함 (§3 해소됨)
+pip install -e '.[embedding,ingestion,dev]'   # ai-agent v0.1.0 + 청커 파서(fitz 등) + ruff/pytest
 python -c "import app.api.main"    # 에이전트 import 해결 = ai-agent 설치 확인
 ./scripts/verify.sh                # format → lint → test
 ```
+
+> `embedding`만으로는 부팅 불가 — `app.api.main` import 체인이 청커(`fitz`/`openpyxl`/
+> `python-docx`)를 모듈 레벨에서 로드한다(`ingestion` extra). `verify.sh` 는 ruff·pytest
+> (`dev` extra)를 요구한다.
 
 ## 5. 참고 문서 (원본 워크스페이스)
 - `HANDOFF-ML-2026-06-09.md` — 인프라 seam(RabbitMQ/Qdrant/Mongo/MySQL)·운영 기본값 전환 §4·§5

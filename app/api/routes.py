@@ -57,6 +57,12 @@
     token 재전송 제거 — 차단 신호는 ``verification`` 이벤트(NOT_SUPPORTED·낮은
     confidenceScore)로 전달되고 BFF 가 그대로 영속한다(렌더링 정책은 FE 소관).
     비-streaming 경로는 종전대로 차단 안내문이 단일 token 으로 나간다(검증 후 송신).
+  - 2026-06-10, 배포 전 점검 — (1) 스트리밍 사후 검증이 그래프 verify 노드와 동일한
+    평가자를 쓰도록 ``resolve_verify_llm_evaluator(deps)`` 로 교체(종전: provider
+    미주입 기본값 직접 호출 → 운영 모드에서도 Fake 평가자로 검증). (2)
+    ``_iter_offloaded`` 의 next()/close() 를 단일 전용 executor 로 직렬화 — 중도
+    disconnect 시 진행 중 next() 와 close() 의 경합("generator already executing")
+    으로 업스트림 스트림 정리가 누락되던 문제 해소.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, FastAPI 0.111+, sse-starlette 2.1+
@@ -64,6 +70,7 @@
 """
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import time
@@ -77,7 +84,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.errors import ErrorCode
 from app.metrics import llm_fallback_total
 from app.pipeline.nodes import verify_pipeline_node
-from app.pipeline.query_graph import run_query
+from app.pipeline.query_graph import resolve_verify_llm_evaluator, run_query
 from app.query.acl import ACLViolationError, build_acl_filter
 from app.query.formatter import format_response
 from app.query.openai_streaming import stream_openai_answer
@@ -170,27 +177,37 @@ def _error_event_for(exc: Exception) -> dict[str, str]:
 
 
 async def _iter_offloaded(iterable: Iterable[Any]) -> AsyncIterator[Any]:
-    """동기 iterator 를 worker thread 에서 한 항목씩 소비하는 비동기 어댑터.
+    """동기 iterator 를 전용 worker thread 에서 한 항목씩 소비하는 비동기 어댑터.
 
     OpenAI streaming 처럼 항목마다 네트워크 대기가 있는 동기 iterator 를 async
     제너레이터 안에서 직접 ``for`` 로 돌리면 이벤트 루프가 차단된다(코드 리뷰 A1).
-    ``next()`` 호출을 ``asyncio.to_thread`` 로 오프로드해 대기 중에도 다른 코루틴
-    (다른 SSE 스트림·healthz·keep-alive ping)이 진행되게 한다. 클라이언트 중도
-    disconnect(GeneratorExit) 시에도 finally 에서 원본 iterator 를 close 해
-    업스트림 자원(HTTP 스트림)을 정리한다.
+    ``next()`` 호출을 worker thread 로 오프로드해 대기 중에도 다른 코루틴
+    (다른 SSE 스트림·healthz·keep-alive ping)이 진행되게 한다.
+
+    ``next()`` 와 ``close()`` 는 **단일 전용 executor 스레드**에서 순차 실행한다 —
+    클라이언트 중도 disconnect 로 본 제너레이터가 취소되면 ``await`` 는 즉시
+    CancelledError 로 풀리지만 worker thread 의 ``next()`` 는 계속 실행 중일 수 있다.
+    이때 다른 스레드에서 ``close()`` 를 부르면 "generator already executing" 으로
+    업스트림 정리가 누락되므로(배포 전 점검 2026-06-10), close 를 같은 executor 큐에
+    넣어 진행 중인 ``next()`` 가 끝난 뒤 실행되도록 직렬화한다. ``shutdown(wait=False)``
+    은 큐에 남은 close 실행을 보장하면서 이벤트 루프를 막지 않는다.
     """
     iterator: Iterator[Any] = iter(iterable)
     sentinel = object()
+    loop = asyncio.get_running_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="sse-iter")
     try:
         while True:
-            item = await asyncio.to_thread(next, iterator, sentinel)
+            item = await loop.run_in_executor(executor, next, iterator, sentinel)
             if item is sentinel:
                 return
             yield item
     finally:
         close = getattr(iterator, "close", None)
         if close is not None:
-            await asyncio.to_thread(close)
+            # 같은 단일 스레드 큐에 적재 — 진행 중인 next() 종료 후 close 가 실행된다.
+            executor.submit(close)
+        executor.shutdown(wait=False)
 
 
 def _classify_ml_error(exc: Exception) -> ErrorCode:
@@ -303,9 +320,7 @@ async def _non_streaming_event_stream(
         # 도달하지 않지만, 그래프 내부 버그/우회 시 ACL 위반이 표면화되어야 한다.
         # 내부 상세는 로그 전용 — 클라이언트에는 고정 문구만 보낸다(코드 리뷰 A15).
         _LOGGER.exception("ACL violation surfaced in non-streaming query")
-        yield _error_event(
-            ErrorCode.ML_SERVER_ERROR, "접근 권한 처리 중 오류가 발생했습니다"
-        )
+        yield _error_event(ErrorCode.ML_SERVER_ERROR, "접근 권한 처리 중 오류가 발생했습니다")
         return
     except Exception as exc:  # noqa: BLE001 — 상류 LLM/네트워크 예외 광범위 캐치 (PoC)
         _LOGGER.exception("non-streaming query failed")
@@ -555,7 +570,10 @@ async def _streaming_event_stream_inner(
     rerank_state.answer = answer
     rerank_state.used_llm = _resolve_used_llm(used_model)
 
-    # 검증 1+2단계 — verify_pipeline_node 에 deps 의 verify_llm_evaluator 주입.
+    # 검증 1+2단계 — 그래프 verify 노드와 **동일한** 평가자 callable 을 사용한다
+    # (resolve_verify_llm_evaluator — deps 의 verifier provider/config/full_context 반영.
+    # 종전처럼 deps.verify_llm_evaluator 기본값을 직접 호출하면 운영 모드에서도 provider
+    # 미주입 Fake 평가자로 동작했다 — 배포 전 점검 2026-06-10).
     # api-spec v2.2.0 §1-1 이벤트 순서 불변식 #2 — 모든 ``token`` 은 ``verifying`` phase
     # 이전에 와야 한다(verifying 이후 token 금지). 따라서 검증/포맷팅으로 답변이 차단·대체될
     # 수 있는지 먼저 판정한 뒤, 대체 token 을 verifying status 송신보다 앞서 내보낸다.
@@ -563,7 +581,7 @@ async def _streaming_event_stream_inner(
     # ``searching`` phase 로 묶어 송신하는 것과 동일한 절충).
     # 검증 2단계는 OpenAI evaluator 동기 호출을 포함 — 동일하게 오프로드(A1).
     await asyncio.to_thread(
-        verify_pipeline_node, rerank_state, llm_evaluator=deps.verify_llm_evaluator
+        verify_pipeline_node, rerank_state, llm_evaluator=resolve_verify_llm_evaluator(deps)
     )
 
     elapsed_ms = (time.perf_counter_ns() - started) // 1_000_000

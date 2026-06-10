@@ -173,3 +173,16 @@ def test_fetch_pages_since_filter(adapter: JsonFixtureSourceAdapter) -> None:
 def test_watch_changes_is_empty_for_fixture(adapter: JsonFixtureSourceAdapter) -> None:
     # 정적 JSON 픽스처는 실시간 변경이 없다
     assert list(adapter.watch_changes()) == []
+
+
+def test_missing_fixture_raises_file_not_found_with_path(tmp_path) -> None:
+    # P1-6 미러(배포 전 점검 2026-06-10) — 픽스처 부재 시 경로·설정 힌트를 담은
+    # FileNotFoundError 로 즉시 표면화한다(ingestion 레포와 동일 가드).
+    adapter = JsonFixtureSourceAdapter(samples_dir=tmp_path, fixture_files=["missing.json"])
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        list(adapter.fetch_pages())
+
+    message = str(excinfo.value)
+    assert str(tmp_path / "missing.json") in message
+    assert "RAG_SAMPLES_DIR" in message

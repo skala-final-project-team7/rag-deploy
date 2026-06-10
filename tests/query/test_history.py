@@ -103,3 +103,15 @@ def test_history_turns_converted_and_passed_to_provider() -> None:
     manage_history(_state(history=_history()), provider=fake)
     assert len(fake.requests) == 1
     assert len(fake.requests[0].history_context) == 2
+
+
+def test_history_config_model_reaches_provider_request() -> None:
+    # 배포 전 점검(2026-06-10) — 운영 wiring 은 모델 지정 config 를 provider 와 함께 주입한다.
+    # classify_history 가 config.model 로 LLM 요청을 만들므로 request.model 에 그대로 반영된다
+    # (기본 HistoryManagerConfig 의 model="configurable" 은 Fake 전용 placeholder).
+    from history_manager_agent.config import HistoryManagerConfig
+
+    fake = _fake("follow_up")
+    config = HistoryManagerConfig(model="gpt-4o-mini")
+    manage_history(_state(history=_history()), provider=fake, history_config=config)
+    assert fake.requests[0].model == "gpt-4o-mini"

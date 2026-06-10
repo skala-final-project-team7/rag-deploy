@@ -243,8 +243,8 @@ def _generate_with_rate_limit_fallback(
     raise 해 ``_apply_fallback`` 안전 분기로 이어지게 한다 (운영 시점에 다운그레이드
     가 의미 없는 에러까지 GPT-4o-mini 로 강제 시도하지 않도록 보호).
 
-    재시도 시점에 ``logging.warning`` 으로 운영 로그 기록 — 다음 세션 feature17
-    의 ``llm_fallback_total`` Prometheus 카운터로 후속 가시화 (현재는 logging 만).
+    재시도 시점에 ``logging.warning`` 운영 로그와 ``llm_fallback_total`` Prometheus
+    카운터(feature17a)를 함께 남긴다.
     """
     try:
         return service.generate(normalized_input=normalized_input, config=config)
@@ -454,8 +454,11 @@ def _agent_sources_to_rag_sources(
 
     Cross-Encoder rerank_score (0.0~1.0)는 본 어댑터가 부여한 폭에 가까운 값이므로
     UI 표시용 정수 점수 (0~100)는 chunk metadata 의 rerank 결과로 역산할 수 없다.
-    chunk 매칭이 가능하면 chunk.metadata 의 정보 (attachment_* / download_url)를
-    보존하고, 점수는 rerank_score(0~1) × 100 의 정수로 변환한다.
+    chunk 매칭이 가능하면 chunk.metadata 의 attachment_filename/mime 를 보존하고
+    점수는 rerank_score(0~1) × 100 의 정수로 변환한다. 출처 제목은 rerank 경로
+    (`rerank_node._chunk_to_source`)와 동일하게 첨부면 attachment_filename, 본문이면
+    page_title 이다. download_url 은 chunk_lookup 접근이 없는 본 경로에서는 채우지
+    않는다(None — rerank 경로가 채운 값은 RagState.sources 에 보존).
     """
     chunk_by_id = {chunk.metadata.chunk_id: chunk for chunk in top_chunks}
     sources: list[Source] = []
@@ -468,9 +471,11 @@ def _agent_sources_to_rag_sources(
         metadata = chunk.metadata
         source_type = SourceType(metadata.source_type.value)
         score_int = max(0, min(100, int(round(agent_source.rerank_score * 100))))
+        # 첨부 청크는 출처 카드 제목을 attachment_filename 으로, 본문 청크는 page_title 로
+        # (rerank_node._chunk_to_source 와 동일 규칙 — 스트리밍/비스트리밍 제목 정합).
         sources.append(
             Source(
-                title=metadata.page_title,
+                title=metadata.attachment_filename or metadata.page_title,
                 score=score_int,
                 path=metadata.section_path or metadata.page_title,
                 space_key=metadata.space_key,

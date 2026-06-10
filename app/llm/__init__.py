@@ -1,14 +1,15 @@
-"""app.llm — LLM 클라이언트 래퍼 [Agent 인프라].
+"""app.llm — (예약 패키지) LLM 클라이언트 공통 래퍼 자리.
 
-Agent 컴포넌트가 사용하는 LLM 호출을 한 곳으로 모은다. 모델 라우팅·타임아웃·재시도·
-Function Calling 스키마 강제·토큰 비용 로깅을 공통 처리한다.
+당초 LLM 호출 공통화(클라이언트 래퍼·구조화 출력·토큰 카운팅)를 모으려던 자리였으나,
+실제 LLM transport 는 각 어댑터 옆에 구현됐다 — 본 패키지는 비어 있으며 import 되지 않는다.
 
-모델 라우팅 (docs/rag-pipeline-design.md §6):
-- GPT-4o      답변 생성기
-- GPT-4o-mini 질의 라우터 / 답변 검증 2단계 / 멀티턴 히스토리 관리자 / 문서 분석기
+실 구현 위치:
+- 답변 생성기 transport      app/query/openai_transport.py (GPT-4o)
+- 답변 생성기 SSE streaming  app/query/openai_streaming.py
+- 질의 라우터 transport      app/query/routing_transport.py (GPT-4o-mini)
+- 대화 제목 생성             app/query/titler.py (GPT-4o-mini)
+- 검증 2단계/히스토리        agent 패키지 자체 provider (build_real_deps 에서 주입)
 
-계획 모듈:
-- client.py            OpenAI 클라이언트 래퍼 (타임아웃·재시도·Fallback)
-- structured_output.py Function Calling 기반 구조화 출력 강제 + 스키마 위반 재시도
-- tokenizer.py         tiktoken cl100k_base 토큰 카운팅
+모델 라우팅 정책(GPT-4o=생성기, GPT-4o-mini=라우터·검증·히스토리·분석기·제목)은
+docs/rag-pipeline-design.md §6 / app/CLAUDE.md §5 참조.
 """

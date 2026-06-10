@@ -60,7 +60,7 @@ llm_fallback_total: Counter = Counter(
 )
 
 # 답변 검증 결과 분포 카운터 — 설계서 §6.4 환각 비율 (NOT_SUPPORTED) KPI 관측 지점.
-# - status: PASS / SUPPORTED / NOT_SUPPORTED / INSUFFICIENT 등 (VerificationStatus enum).
+# - status: PASS / SUPPORTED / NOT_SUPPORTED (VerificationStatus enum 3종).
 # 운영 쿼리 ``sum(rate(verification_status_total{status="NOT_SUPPORTED"}[5m])) /
 #           sum(rate(verification_status_total[5m]))`` 로 환각 비율 산출.
 verification_status_total: Counter = Counter(

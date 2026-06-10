@@ -9,12 +9,17 @@
 작성일 : 2026-05-15
 변경사항 내역 (날짜, 변경목적, 변경내용 순)
   - 2026-05-15, 최초 작성, feature8 통합 — manage_history 어댑터 노드
+  - 2026-06-10, 배포 전 점검 — ``history_config`` keyword 추가(라우터 routing_config
+    패턴 정합). 운영 모드가 OpenAIHistoryLLMProvider 와 함께 모델 지정 config 를
+    주입한다(agent ``classify_history`` 가 config.model 로 LLM 요청을 만들므로 기본
+    config(model="configurable")로는 실 호출이 불가능했다 — build_real_deps 배선).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, Pydantic 2.7+
-  - NOTE: history_manager_agent는 ai-agent 저장소에서 vendoring한 별도 패키지이며
-          무수정 보존한다. 본 어댑터만 RAG 컨벤션을 따른다. LLM provider 기본값은
-          FakeHistoryLLMProvider(PoC·테스트)이며, 실제 OpenAIHistoryLLMProvider를 주입할 수 있다.
+  - NOTE: history_manager_agent는 ai-agent 저장소가 소유한 별도 패키지이며 무수정
+          사용한다(개발 레포는 vendoring, 배포 레포는 lina-ai-agents 설치 — 동일 코드).
+          본 어댑터만 RAG 컨벤션을 따른다. LLM provider 기본값은
+          FakeHistoryLLMProvider(PoC·테스트)이며, 운영은 OpenAIHistoryLLMProvider 를 주입한다.
 --------------------------------------------------
 """
 
@@ -45,10 +50,11 @@ def manage_history(
     state: RagState,
     *,
     provider: HistoryLLMProvider | None = None,
+    history_config: HistoryManagerConfig | None = None,
 ) -> RagState:
     """멀티턴 히스토리 관리자 노드 — 히스토리를 판단해 RagState.history_decision을 채운다.
 
-    vendoring한 history-manager-agent의 로직 함수(정규화 → 분류 → 컨텍스트 정책 →
+    history-manager-agent의 로직 함수(정규화 → 분류 → 컨텍스트 정책 →
     contextualized question)를 in-process로 호출한다. 그 출력(follow_up/new_topic/
     ambiguous 판단, contextualized question, preserved context 등)을 RagState의
     `history_decision` 필드에 담는다. `query`는 원문 그대로 두어 비파괴적이며,
@@ -57,7 +63,11 @@ def manage_history(
     Args:
         state: Query 파이프라인 상태. `query`/`user_id`/`conversation_id`/`history`를 읽는다.
         provider: 히스토리 분류용 LLM provider. None이면 FakeHistoryLLMProvider를 쓴다
-            (PoC·테스트). 실제 운영에서는 OpenAIHistoryLLMProvider를 주입한다.
+            (PoC·테스트). 운영(build_real_deps)은 OpenAIHistoryLLMProvider를 주입한다.
+        history_config: agent 설정. ``classify_history`` 가 LLM 요청을 만들 때
+            ``config.model``/``temperature``/``timeout_seconds`` 를 사용하므로, 실
+            provider 를 주입할 때는 모델을 지정한 config 를 함께 주입해야 한다.
+            None 이면 기본 ``HistoryManagerConfig()`` (Fake provider 전용 placeholder).
 
     Returns:
         `history_decision`이 채워진 RagState (입력 state를 갱신해 반환).
@@ -73,7 +83,7 @@ def manage_history(
         )
         return state
 
-    config = HistoryManagerConfig()
+    config = history_config or HistoryManagerConfig()
     selected_provider = provider or FakeHistoryLLMProvider(_DEFAULT_FAKE_CLASSIFICATION)
 
     # RagState.history(HistoryTurn)를 agent 입력 payload로 변환한다. RagState의 HistoryTurn은

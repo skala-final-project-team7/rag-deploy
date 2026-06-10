@@ -91,6 +91,7 @@ def patched_real_adapters(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "reranker_init": None,
         "store_from_settings": None,
         "routing_provider_init": None,
+        "history_provider_init": None,
         "verifier_provider_init": None,
         "generator_provider_init": None,
         "generator_transport_init": None,
@@ -130,6 +131,21 @@ def patched_real_adapters(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
                 "transport": transport,
             }
 
+    class _FakeOpenAIHistory:
+        """OpenAIHistoryLLMProvider 대체 — API key 검증·실 HTTP transport 회피.
+
+        배포 전 점검(2026-06-10) — build_real_deps 가 히스토리 매니저 agent 도
+        모델 지정 config(gpt-4o-mini) + 명시 api_key 로 wiring 하는지 회귀 보호한다.
+        """
+
+        def __init__(self, *, config: Any, api_key: str, transport: Any | None = None) -> None:
+            captured["history_provider_init"] = {
+                "config": config,
+                "api_key_provided": bool(api_key),
+                "transport": transport,
+            }
+            self.config = config
+
     class _FakeOpenAIEvaluator:
         """OpenAIEvaluatorProvider 대체 — API key 검증·실 HTTP transport 회피."""
 
@@ -157,6 +173,7 @@ def patched_real_adapters(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     import answer_generation_agent.generation.answer_generation as generation_module
     import answer_verification_agent.evaluator.providers as verifier_providers_module
+    import history_manager_agent.llm as history_llm_module
 
     import app.ingestion.embedder.dense as dense_module
     import app.ingestion.embedder.sparse as sparse_module
@@ -168,6 +185,7 @@ def patched_real_adapters(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(reranker_module, "CrossEncoderRerankerImpl", _fake_reranker_factory)
     monkeypatch.setattr(QdrantPoolStore, "from_settings", classmethod(_fake_from_settings))
     monkeypatch.setattr(routing_llm_module, "OpenAIRoutingLLMProvider", _FakeOpenAIRouting)
+    monkeypatch.setattr(history_llm_module, "OpenAIHistoryLLMProvider", _FakeOpenAIHistory)
     monkeypatch.setattr(verifier_providers_module, "OpenAIEvaluatorProvider", _FakeOpenAIEvaluator)
     monkeypatch.setattr(generation_module, "OpenAIAnswerLLMProvider", _FakeOpenAIAnswer)
     monkeypatch.setattr(
@@ -201,6 +219,12 @@ def test_build_real_deps_wires_real_adapter_classes(
     assert patched_real_adapters["store_from_settings"]["dense_dimension"] == 1024
     # 라우터 provider 는 GPT-4o-mini 로 설정돼야 한다 (app/CLAUDE.md §5 라우팅 정책).
     assert patched_real_adapters["routing_provider_init"]["config"].model == "gpt-4o-mini"
+    # 히스토리 매니저 provider 도 GPT-4o-mini config 로 wiring 된다(배포 전 점검 2026-06-10
+    # — 종전 운영 누락 보완. classify_history 가 config.model 로 LLM 요청을 만든다).
+    assert patched_real_adapters["history_provider_init"]["config"].model == "gpt-4o-mini"
+    assert deps.history_provider is not None
+    assert deps.history_config is not None
+    assert deps.history_config.model == "gpt-4o-mini"
     # Fake 어댑터는 PoC 경로에서만 사용되어야 한다 — 운영 모드는 Fake 사용 금지
     assert not isinstance(deps.dense_embedder, FakeDenseEmbedder)
     assert not isinstance(deps.sparse_embedder, FakeSparseEmbedder)

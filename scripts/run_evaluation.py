@@ -548,7 +548,7 @@ def _run_debug_verify(query: str, *, use_real: bool) -> int:
         "sentences": records,
         "summary": _summarize_debug_verify(records),
     }
-    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n[debug-verify] report = {output_path}")
     return 0
 
@@ -759,7 +759,8 @@ def _run_debug_leniency(query: str, *, use_real: bool) -> int:
             },
             ensure_ascii=False,
             indent=2,
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"[debug-leniency] report = {output_path}")
     return 0
@@ -786,7 +787,7 @@ def _run_evaluation(
     from app.query.verifier_evaluator import manage_verifier_evaluator
     from app.schemas.rag_state import RagState
 
-    with eval_set_path.open() as fp:
+    with eval_set_path.open(encoding="utf-8") as fp:
         eval_data = json.load(fp)
     items: list[dict[str, Any]] = eval_data["items"]
 
@@ -1014,7 +1015,7 @@ def _run_evaluation(
     if output_path is None:
         output_path = Path("reports") / f"evaluation_{datetime.utcnow():%Y%m%d_%H%M%S}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"[eval] {len(items)} items 실행 완료")
     print(f"[eval] report = {output_path}")
@@ -1045,7 +1046,7 @@ def _load_page_id_to_webui_link(
         if not path.exists():
             continue
         try:
-            with path.open() as fp:
+            with path.open(encoding="utf-8") as fp:
                 data = json.load(fp)
         except (OSError, json.JSONDecodeError):
             continue

@@ -139,8 +139,8 @@ class VerificationSummary(BaseModel):
 class QueryResponse(BaseModel):
     """POST /ml/query의 완성형 응답 객체 (docs/api-spec.md).
 
-    intent / used_llm / latency_ms / feedback_enabled 는 BE 통합 스펙에서 ``meta``
-    이벤트가 제거됨에 따라 SSE 로 노출하지 않고 내부 메트릭·분기 판단용으로만 유지한다.
+    intent / used_llm / latency_ms / feedback_enabled 는 SSE ``meta`` 이벤트로
+    송신된다(api-spec v2.2.0 §1-1 — 7종 이벤트 정본. routes._sse_payload).
     """
 
     answer: str

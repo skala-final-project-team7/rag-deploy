@@ -687,3 +687,27 @@ def test_samples_attachments_pdf_csv_through_adapter(tmp_path: Path) -> None:
 
     # pdf → raw_text, csv → sheet_serialized 두 경로 모두 어댑터 경유로 동작
     assert formats_seen == {ExtractedFormat.RAW_TEXT, ExtractedFormat.SHEET_SERIALIZED}
+
+
+def test_resolve_attachment_path_unquotes_file_uri(tmp_path: Path) -> None:
+    """local_path 부재 시 file:// URI 의 percent-encoding(한글 파일명)을 복원한다.
+
+    Path.as_uri() 는 비ASCII 를 percent-encode 하므로 unquote 없이는 인코딩된
+    리터럴 경로를 열게 된다(배포 전 점검 2026-06-10 — 잠복 결함 수정 회귀).
+    """
+    from app.ingestion.chunker.attachment import _resolve_attachment_path
+
+    target = tmp_path / "운영가이드.docx"
+    target.write_bytes(b"placeholder")
+    attachment = Attachment(
+        attachment_id="ATT-kr",
+        filename="운영가이드.docx",
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        extracted_text="",
+        extracted_format=ExtractedFormat.RAW_TEXT,
+        download_url=target.as_uri(),
+        local_path=None,
+        parent_page_id="P1",
+        last_modified=datetime.fromisoformat("2026-04-22T08:15:00+09:00"),
+    )
+    assert _resolve_attachment_path(attachment) == str(target)

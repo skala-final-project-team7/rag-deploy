@@ -100,7 +100,7 @@ def main() -> int:
         print(f"[err] evaluation-results not found: {args.evaluation_results}")
         return 1
 
-    report = json.loads(args.evaluation_results.read_text())
+    report = json.loads(args.evaluation_results.read_text(encoding="utf-8"))
     results: list[dict[str, Any]] = report.get("results", [])
     if not results:
         print("[err] 평가 결과 JSON 에 results 가 비어 있다.")
@@ -148,7 +148,9 @@ def main() -> int:
         },
         "golden_set": extracted,
     }
-    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print(f"[golden] 저장 = {output_path}")
     print()
     print("[가이드] Golden Set 은 후속 회귀 평가 (feature17c 튜닝 결과 vs baseline) ")
@@ -168,7 +170,7 @@ def _load_feedback_map(feedback_path: Path | None) -> dict[str, str]:
     if not feedback_path.exists():
         print(f"[warn] feedback-file 미존재: {feedback_path} — 빈 매핑으로 진행")
         return {}
-    raw = json.loads(feedback_path.read_text())
+    raw = json.loads(feedback_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(
             f"feedback-file 형식 오류 — dict 가 필요한데 {type(raw).__name__} 가 왔다."

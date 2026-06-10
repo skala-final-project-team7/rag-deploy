@@ -2,11 +2,12 @@
 
 --------------------------------------------------
 작성자 : 최태성
-작성목적 : RAG 파이프라인 HTTP 계층의 Error Response 스키마와 표준 코드를 정의한다.
-          `RETRIEVAL_EMPTY` / `LOW_CONFIDENCE` / `VERIFICATION_BLOCKED` 같은 "표준
-          분기 응답"은 200 SSE 성공 응답 내부에서 처리되므로(`feedback_enabled=False`
-          또는 답변 대체) 본 모듈의 Error Response는 `UNAUTHORIZED`(JWT 추출 실패) 와
-          `UPSTREAM_LLM_ERROR`(LLM 호출 실패 / 타임아웃) 같은 본격 오류에만 사용된다.
+작성목적 : api-spec.md Error Response 표의 표준 코드(``ErrorCode``)를 정의한다.
+          본 앱의 오류 표면은 SSE ``error`` 이벤트(routes._error_event — ``errorCode``/
+          ``message``)뿐이며 실사용 값은 ML_* 3종이다. `RETRIEVAL_EMPTY` /
+          `LOW_CONFIDENCE` / `VERIFICATION_BLOCKED` 같은 "표준 분기 응답"은 200 SSE
+          성공 응답 내부에서 처리되고(`feedback_enabled=False` / 답변 대체), 나머지
+          코드는 spec 표 호환으로 정의만 유지한다(HTTP 에러 봉투는 BFF 책임 — 하단 NOTE).
 작성일 : 2026-05-18
 변경사항 내역 (날짜, 변경목적, 변경내용 순)
   - 2026-05-18, 최초 작성, feature11 통합 Phase 2 — ErrorCode StrEnum +
@@ -34,8 +35,8 @@ class ErrorCode(StrEnum):
     각 코드는 BFF/프론트가 분기 처리하는 식별자다. ``RETRIEVAL_EMPTY`` /
     ``LOW_CONFIDENCE`` / ``VERIFICATION_BLOCKED`` 도 api-spec.md 표에 포함되어
     있으나, 본 구현에서는 그 세 분기를 200 SSE 성공 응답 내부에서 처리한다
-    (`feedback_enabled` / 답변 대체). 본 Enum은 4xx/5xx 응답에만 쓰이는 코드를
-    명시하지만 호환성을 위해 모두 정의해 둔다.
+    (`feedback_enabled` / 답변 대체). 본 앱이 실제로 송신하는 값은 SSE ``error``
+    이벤트의 ML_* 3종뿐이며, 나머지는 spec 표 호환을 위해 정의만 유지한다.
     """
 
     UNAUTHORIZED = "UNAUTHORIZED"

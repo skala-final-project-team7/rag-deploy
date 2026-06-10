@@ -82,7 +82,7 @@ def main() -> None:
     for page in pages:
         doc_type_dist[str(infer_doc_type(page))] += 1
         total_chunks += len(chunk_page(page))
-    print(f"\n[청킹] 92개 페이지 → {total_chunks}개 청크 (오류 0건)")
+    print(f"\n[청킹] {len(pages)}개 페이지 → {total_chunks}개 청크 (오류 0건)")
     print("  doc_type 추정(라벨 휴리스틱, 실제는 문서 분석기 Agent 담당):")
     for doc_type, count in sorted(doc_type_dist.items()):
         print(f"    {doc_type:<14} {count:>3}개")
@@ -95,7 +95,7 @@ def main() -> None:
         print(f"  #{meta.chunk_index} [{meta.section_header}] {meta.token_count}토큰  {preview}...")
 
     print("\n" + "=" * 60)
-    print(f"  ✓ 데이터 계층 + 청킹 정상 — 92개 페이지 → {total_chunks}개 청크")
+    print(f"  ✓ 데이터 계층 + 청킹 정상 — {len(pages)}개 페이지 → {total_chunks}개 청크")
     print("=" * 60)
 
 

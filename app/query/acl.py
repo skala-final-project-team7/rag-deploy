@@ -3,9 +3,11 @@
 --------------------------------------------------
 작성자 : 최태성
 작성목적 : LINA RAG 파이프라인의 사용자 단위 검색 권한 경계를 시스템 단에서 강제한다.
-          BFF가 전달한 JWT에서 사용자 식별(user_id/groups)을 추출하고, Qdrant 검색에
-          항상 주입되는 ACL 필터를 생성하며, ACL 필터 없는 검색 호출을 데코레이터로
-          거부한다 (rag-pipeline-design.md §6 4.2, app/CLAUDE.md §3, db-schema.md §1.4).
+          BFF가 본문으로 전달한 userId/groups 로 Qdrant 검색에 항상 주입되는 ACL 필터를
+          생성하고, ACL 필터 없는 검색 호출을 데코레이터로 거부한다
+          (rag-pipeline-design.md §6 4.2, app/CLAUDE.md §3, db-schema.md §1.4).
+          JWT 클레임 추출(extract_principal)은 v2.3.0 이후 라우트에서 사용하지 않으며
+          (BFF 가 JWT 검증·추출을 책임 — §2-1), 예비 유틸로만 보존한다.
 작성일 : 2026-05-15
 변경사항 내역 (날짜, 변경목적, 변경내용 순)
   - 2026-05-15, 최초 작성, feature7 — extract_principal / build_acl_filter / @enforce_acl
@@ -38,7 +40,8 @@ from pydantic import BaseModel, Field
 class PrincipalExtractionError(Exception):
     """JWT에서 사용자 식별(user_id/groups) 추출에 실패했을 때 발생한다.
 
-    API 계층에서 `UNAUTHORIZED`(401) 응답으로 매핑된다 (docs/api-spec.md).
+    api-spec 의 `UNAUTHORIZED` 에 대응하는 실패다. 현행 `/ml/query` 라우트는 JWT 를
+    직접 받지 않으므로(BFF 책임 — §2-1) 본 예외는 예비 유틸 경로에서만 발생한다.
     """
 
 

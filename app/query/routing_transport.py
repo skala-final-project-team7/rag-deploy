@@ -159,30 +159,35 @@ def build_openai_routing_transport(
         # lazy import — openai 없는 환경 (PoC) 에서도 모듈 로드 가능.
         from openai import APIError, OpenAI, RateLimitError
 
+        # 호출마다 생성하는 클라이언트는 finally 에서 close — 커넥션 풀 누수 방지
+        # (openai_transport.py A7 정합. 배포 전 점검 2026-06-10 에 누락 보완).
         client = OpenAI(api_key=api_key, timeout=float(request.timeout_seconds))
         try:
-            response = client.chat.completions.create(
-                model=request.model,
-                temperature=request.temperature,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    # agent 가 만든 사용자 prompt (history_decision / context_summary /
-                    # entities / turn_refs 정보 포함) 를 그대로 user 메시지로 전달.
-                    {"role": "user", "content": request.prompt},
-                ],
-                response_format={"type": "json_object"},
-            )
-        except RateLimitError as exc:
-            # OpenAI RateLimitError 는 agent 의 OpenAITransportError(429) 로 매핑해
-            # 상위 provider 가 routing fallback 으로 흡수하도록 한다.
-            raise OpenAITransportError(429, "OpenAI rate limit") from exc
-        except APIError as exc:
-            status = getattr(exc, "status_code", None) or 500
-            raise OpenAITransportError(status, "OpenAI API error") from exc
-        try:
-            return str(response.choices[0].message.content or "")
-        except (AttributeError, IndexError, TypeError) as exc:
-            raise OpenAITransportError(500, "OpenAI response schema error") from exc
+            try:
+                response = client.chat.completions.create(
+                    model=request.model,
+                    temperature=request.temperature,
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        # agent 가 만든 사용자 prompt (history_decision / context_summary /
+                        # entities / turn_refs 정보 포함) 를 그대로 user 메시지로 전달.
+                        {"role": "user", "content": request.prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+            except RateLimitError as exc:
+                # OpenAI RateLimitError 는 agent 의 OpenAITransportError(429) 로 매핑해
+                # 상위 provider 가 routing fallback 으로 흡수하도록 한다.
+                raise OpenAITransportError(429, "OpenAI rate limit") from exc
+            except APIError as exc:
+                status = getattr(exc, "status_code", None) or 500
+                raise OpenAITransportError(status, "OpenAI API error") from exc
+            try:
+                return str(response.choices[0].message.content or "")
+            except (AttributeError, IndexError, TypeError) as exc:
+                raise OpenAITransportError(500, "OpenAI response schema error") from exc
+        finally:
+            client.close()
 
     return _transport
 

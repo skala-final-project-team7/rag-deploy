@@ -32,7 +32,7 @@ class HistoryTurn(BaseModel):
     **lowercase** 다 — LLM/OpenAI 산업 표준(Enum 정책의 명시된 예외). 저장(`docs/db-schema.md`
     `messages.role`)·외부 응답(§1-2)·RAG 와이어(`/ml/query` `history[].role`)가 모두 lowercase
     로 통일되며 **boundary 변환이 없다**. 대소문자 무관 입력을 수용하되 표준 소문자로 정규화한다
-    (하위 호환 — 구버전이 대문자로 보내도 받는다). 멀티턴 히스토리 관리자(vendored)도 입력
+    (하위 호환 — 구버전이 대문자로 보내도 받는다). 멀티턴 히스토리 관리자 agent 도 입력
     role 을 내부적으로 소문자화한다(`history_manager_agent/history/normalization.py`).
     """
 
@@ -49,7 +49,7 @@ class HistoryTurn(BaseModel):
 class HistoryDecision(BaseModel):
     """멀티턴 히스토리 관리자(History Manager Agent)의 히스토리 판단 결과.
 
-    vendoring한 ``history_manager_agent`` 패키지가 산출한 판단을 RagState로 전달하는
+    ``history_manager_agent`` 패키지(ai-agent 소유)가 산출한 판단을 RagState로 전달하는
     어댑터 모델이다. ``app/query/history.py``의 ``manage_history`` 노드가 채운다.
     """
 

@@ -429,3 +429,50 @@ def test_run_query_empty_acl_filter_raises(
     state = _initial_state(acl_filter_override={})
     with pytest.raises(ACLViolationError):
         run_query(state, graph=graph)
+
+
+# --- resolve_verify_llm_evaluator (배포 전 점검 2026-06-10) ---
+# 스트리밍 라우트의 사후 검증이 그래프 verify 노드와 동일한 평가자(provider/config/
+# full_context 반영)를 쓰도록 단일 해석 지점을 검증한다 — 종전에는 라우트가 provider
+# 미주입 기본값을 직접 호출해 운영 모드에서도 Fake 평가자로 검증됐다.
+
+
+def test_resolve_verify_llm_evaluator_injects_provider_partial(
+    dense: FakeDenseEmbedder,
+    sparse: FakeSparseEmbedder,
+    empty_store: QdrantPoolStore,
+) -> None:
+    import functools
+
+    from app.pipeline.query_graph import resolve_verify_llm_evaluator
+    from app.query.verifier_evaluator import manage_verifier_evaluator
+
+    provider = object()
+    config = object()
+    deps = _deps(
+        dense,
+        sparse,
+        empty_store,
+        verifier_provider=provider,
+        verifier_config=config,
+        verifier_full_context=True,
+    )
+    resolved = resolve_verify_llm_evaluator(deps)
+    assert isinstance(resolved, functools.partial)
+    assert resolved.func is manage_verifier_evaluator
+    assert resolved.keywords == {
+        "provider": provider,
+        "config": config,
+        "full_context": True,
+    }
+
+
+def test_resolve_verify_llm_evaluator_returns_custom_callable_as_is(
+    dense: FakeDenseEmbedder,
+    sparse: FakeSparseEmbedder,
+    empty_store: QdrantPoolStore,
+) -> None:
+    from app.pipeline.query_graph import resolve_verify_llm_evaluator
+
+    deps = _deps(dense, sparse, empty_store, verify_llm_evaluator=verify_llm_evaluator_stub)
+    assert resolve_verify_llm_evaluator(deps) is verify_llm_evaluator_stub

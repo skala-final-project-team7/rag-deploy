@@ -14,7 +14,7 @@
     적재하고 chunk_attachment(첨부)를 호출하지 않아 첨부 내용이 Qdrant 에 전혀
     인덱싱되지 않았다(첨부 활용 평가 8건 중 6건 검색 0건). 청크 수집 로직을
     테스트 가능한 collect_chunks 헬퍼로 분리하고, 각 첨부에 chunk_attachment 를
-    호출한다. 미지원 유형(PDF/CSV=feature4-B 미구현)·파싱 실패는 안전 skip 한다.
+    호출한다(pdf/docx/xlsx/csv 4종 — feature4 완료). 유형 판별·파싱 실패는 안전 skip 한다.
     NOTE: attachment_analyzer 게이트는 extracted_text 가 채워졌다고 가정하는데
     데모 어댑터는 이를 비워 두므로(실 운영 ingestion 그래프의 추출 어댑터 책임),
     데모/평가 1회 적재는 chunk_attachment 가 local_path 로 파일을 직접 읽는
@@ -73,9 +73,9 @@ class CollectedChunks:
 def collect_chunks(adapter: DocumentSourceAdapter) -> CollectedChunks:
     """어댑터의 모든 PageObject 를 본문 + 첨부 청크로 변환해 수집한다.
 
-    본문은 ``chunk_page`` 로, 첨부는 ``chunk_attachment`` 로 청킹한다. 첨부 청킹은
-    docx/xlsx 만 지원하므로(feature4-A), 미지원 유형(PDF/CSV=feature4-B)·파싱 실패는
-    ``skipped_attachments`` 에 사유와 함께 기록하고 건너뛴다(적재는 계속 진행).
+    본문은 ``chunk_page`` 로, 첨부는 ``chunk_attachment`` 로 청킹한다(pdf/docx/xlsx/csv
+    4종 — feature4 완료). 유형 판별 실패·파싱 실패는 ``skipped_attachments`` 에 사유와
+    함께 기록하고 건너뛴다(적재는 계속 진행).
 
     Args:
         adapter: ``fetch_pages()`` 로 PageObject 를 제공하는 Document Source Adapter.
@@ -100,7 +100,7 @@ def collect_chunks(adapter: DocumentSourceAdapter) -> CollectedChunks:
             try:
                 attachment_chunks = chunk_attachment(attachment, page)
             except ValueError as exc:
-                # 미지원 유형(PDF/CSV) 또는 유형 판별 실패 — 적재는 계속한다.
+                # 미지원·암호화 또는 유형 판별 실패(ValueError) — 적재는 계속한다.
                 collected.skipped_attachments.append((attachment.attachment_id, str(exc)))
                 continue
             except Exception as exc:  # noqa: BLE001 — 파일 파싱 실패도 적재 중단 없이 skip.

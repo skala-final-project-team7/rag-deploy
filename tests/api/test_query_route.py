@@ -384,7 +384,7 @@ def _streaming_client(
         )
     deps_kwargs: dict[str, Any] = {}
     if verify_llm_evaluator is not None:
-        # A5 차단 분기 회귀용 — 기본 Fake(전부 SUPPORTED) 대신 UNSUPPORTED 평가자 주입.
+        # A5 차단 분기 회귀용 — 명시 UNSUPPORTED 평가자 주입(기본 Fake 평가는 입력 의존).
         deps_kwargs["verify_llm_evaluator"] = verify_llm_evaluator
     deps = QueryGraphDeps(
         dense_embedder=dense,
@@ -653,9 +653,7 @@ async def test_query_route_stream_true_blocked_branch_does_not_resend_token(
     # 차단 안내문 재전송 없음 — token 은 스트리밍 원본과 정확히 일치.
     assert token_contents == streaming_tokens
     # 차단 신호는 verification 이벤트로 — 전 문장 미근거라 NOT_SUPPORTED.
-    verification_payloads = [
-        json.loads(data) for name, data in events if name == "verification"
-    ]
+    verification_payloads = [json.loads(data) for name, data in events if name == "verification"]
     assert len(verification_payloads) == 1
     assert verification_payloads[0]["verificationResult"] == "NOT_SUPPORTED"
 

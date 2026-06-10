@@ -290,6 +290,9 @@ def test_attachment_source_metadata_preserved() -> None:
     assert src.attachment_filename == "manual.pdf"
     assert src.attachment_mime == "application/pdf"
     assert src.source_type is SourceType.ATTACHMENT
+    # 출처 제목은 rerank 경로(_chunk_to_source)와 동일하게 첨부 파일명이다
+    # (배포 전 점검 2026-06-10 — 스트리밍/비스트리밍 제목 정합).
+    assert src.title == "manual.pdf"
 
 
 # --- 안전 fallback (§4.6.5 정합) ---

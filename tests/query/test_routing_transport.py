@@ -36,16 +36,22 @@ class _FakeResponse:
 
 
 class _FakeChatClient:
-    """OpenAI client 대체 — chat.completions.create 만 받는 최소 스텁."""
+    """OpenAI client 대체 — chat.completions.create + close 를 받는 최소 스텁."""
 
     def __init__(self, *, response_content: str = '{"intent":"operations_guide"}') -> None:
         self.captured_kwargs: dict[str, Any] | None = None
+        self.closed = False
         self._response = _FakeResponse(response_content)
         self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs: Any) -> _FakeResponse:
         self.captured_kwargs = kwargs
         return self._response
+
+    def close(self) -> None:
+        # 실제 OpenAI 클라이언트의 close 와 동일 표면 — transport 가 finally 에서
+        # 커넥션 풀을 정리하는지(배포 전 점검 2026-06-10) 검증 가능하게 한다.
+        self.closed = True
 
 
 def _install_fake_openai(monkeypatch: pytest.MonkeyPatch, client: _FakeChatClient) -> None:
@@ -177,6 +183,9 @@ def test_transport_rate_limit_maps_to_openai_transport_error_429(
         def _create(self, **_kwargs: Any) -> Any:
             raise _RateLimitError("rate limit")
 
+        def close(self) -> None:
+            return None
+
     module = types.ModuleType("openai")
     module.OpenAI = lambda **kwargs: _RateLimitClient()  # type: ignore[attr-defined]
     module.RateLimitError = _RateLimitError  # type: ignore[attr-defined]
@@ -187,3 +196,14 @@ def test_transport_rate_limit_maps_to_openai_transport_error_429(
     with pytest.raises(OpenAITransportError) as exc_info:
         transport(_make_request())
     assert exc_info.value.status_code == 429
+
+
+def test_transport_closes_client_after_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """호출마다 생성한 OpenAI 클라이언트를 finally 에서 close 한다(A7 정합, 2026-06-10)."""
+    client = _FakeChatClient()
+    _install_fake_openai(monkeypatch, client)
+
+    transport = build_openai_routing_transport(api_key="sk-test")
+    transport(_make_request())
+
+    assert client.closed is True

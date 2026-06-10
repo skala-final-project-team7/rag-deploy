@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     source_type: str = "json_fixture"  # json_fixture | atlassian
     samples_dir: str = "samples"
     # NOTE: access_token / cloudid 전달 경로는 미정(TBD) — docs/ai/current-plan.md 참조
+    # 예약 — rag 의 atlassian 어댑터는 미구현(factory NotImplementedError)이라 현재 미사용.
+    # 실 수집은 ingestion 레포 담당이며, 본 키는 추후 어댑터 도입 시의 자리만 잡아둔다.
     atlassian_api_base_url: str = "https://api.atlassian.com"
 
     # --- Qdrant Multi-Pool Vector Store ---

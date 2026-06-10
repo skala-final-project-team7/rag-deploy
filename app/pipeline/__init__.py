@@ -5,7 +5,8 @@ app.ingestion / app.query 의 단계별 노드를 LangGraph StateGraph로 연결
 
 모듈:
 - query_graph.py      Query 그래프 (ACL → 히스토리 → 라우터 → 검색·재순위화 → 생성 → 검증 → 포맷)
-                      히스토리 관리자의 needs_search=false 시 검색 단계 스킵 분기 포함
+                      + 검색 0건(empty_retrieval) 분기. (RagState.needs_search 는 agent MVP 가
+                      검색 스킵 신호를 내지 않아 예약 필드 — 스킵 분기는 없다)
 - ingestion_graph.py  Ingestion 그래프 (analyze → chunk → embed_upsert + jobs 기록)
                       문서 분석기[Agent]는 manage_document_analyzer 어댑터(PoC=Fake)
 - nodes.py            Pipeline 노드 래퍼 (empty_retrieval / verify_pipeline / after_search_branch)

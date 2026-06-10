@@ -112,8 +112,9 @@ def _fake_attachment_chunk(
         attachment_type if isinstance(attachment_type, AttachmentType) else AttachmentType.DOCX
     )
     if resolved in (AttachmentType.PDF, AttachmentType.CSV):
-        # feature4-B 대기 — 실제 chunk_attachment 도 동일 ValueError 던진다.
-        raise ValueError(f"{resolved.value} 첨부는 feature4-B 대기")
+        # ValueError 격리 경로 검증용 — 실제 chunk_attachment 는 pdf/csv 를 지원하지만
+        # (feature4-B 완료), 미지원·판별 실패 시 동일하게 ValueError 를 던진다.
+        raise ValueError(f"{resolved.value} 첨부는 본 fake 가 미지원으로 시뮬레이션")
     meta = ChunkMetadata(
         chunk_id="b" * 40,
         page_id=page.page_id,
@@ -245,12 +246,14 @@ def test_low_quality_attachment_skipped_with_jobs_record(deps: IngestionGraphDep
     assert any(r.status is IngestionStatus.LOW_QUALITY_ATTACH for r in attach_jobs)
 
 
-# --- PDF (feature4-B 대기) — chunk_attachment ValueError catch ---
+# --- chunk_attachment ValueError catch (첨부 단위 격리) ---
 
 
 def test_pdf_attachment_skipped_with_jobs_record(deps: IngestionGraphDeps) -> None:
-    """PDF 첨부 → 분석은 통과(SUCCESS)하지만 chunk_attachment 가 ValueError →
-    catch 후 잡 기록 + 본문은 정상 적재 (feature4-B 대기 명시)."""
+    """첨부 청킹 ValueError → catch 후 잡 기록 + 본문은 정상 적재.
+
+    fake 청커가 PDF 를 미지원으로 시뮬레이션한다(실제 chunk_attachment 는 pdf 지원 —
+    feature4-B 완료. 본 테스트의 검증 대상은 ValueError 격리 경로다)."""
     page = _page(
         attachments=[
             _attachment(
@@ -418,3 +421,52 @@ def test_build_ingestion_graph_compiles_without_node_state_key_collision(
     """
     graph = build_ingestion_graph(deps)
     assert graph is not None
+
+
+# --- 비-ValueError 라이브러리 예외 격리 (배포 전 점검 2026-06-10 — worker P1-2 정합) ---
+
+
+def _crashing_attachment_chunk(
+    attachment: Attachment, page: PageObject, attachment_type: AttachmentType | str | None
+) -> list[Chunk]:
+    """손상 파일 상당 — 추출 라이브러리 고유 예외(비 ValueError)를 재현한다."""
+    raise RuntimeError("PackageNotFoundError 상당 — 손상 docx")
+
+
+def test_non_value_error_attachment_isolated_with_jobs_record() -> None:
+    """첨부 청킹의 비-ValueError 예외도 첨부 단위로 격리된다(본문·잡은 정상).
+
+    손상 파일은 openpyxl InvalidFileException / python-docx PackageNotFoundError /
+    PyMuPDF FileDataError 등 ValueError 가 아닌 예외를 던진다 — 격리 없이는 첨부 1건이
+    페이지 전체(본문 포함) 적재를 죽인다(ingestion chunking_worker P1-2 와 동일 뿌리).
+    """
+    settings = _settings()
+    store = QdrantPoolStore.in_memory(settings, dense_dimension=8)
+    store.bootstrap_collections()
+    deps = IngestionGraphDeps(
+        dense_embedder=FakeDenseEmbedder(dimension=8),
+        sparse_embedder=FakeSparseEmbedder(),
+        store=store,
+        cache=FakeEmbeddingCache(),
+        chunk_lookup=FakeChunkTextLookup(),
+        jobs=FakeIngestionJobsRepository(),
+        chunk_attachment_fn=_crashing_attachment_chunk,
+    )
+    page = _page(
+        attachments=[
+            _attachment(
+                attachment_id="ATT-broken",
+                filename="broken.docx",
+                mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        ]
+    )
+    run_ingestion(IngestionState(page=page), graph=build_ingestion_graph(deps))
+
+    # 본문은 정상 적재되고 첨부 청크만 빠진다.
+    assert deps.store.scroll_page_ids() == {"P1"}
+    assert deps.store.scroll_attachment_ids() == set()
+    attach_jobs = [r for r in deps.jobs.records if r.attachment_id == "ATT-broken"]
+    assert attach_jobs, "격리된 첨부도 잡 기록은 남아야 한다"
+    assert any(r.status is IngestionStatus.UNSUPPORTED_ATTACH_TYPE for r in attach_jobs)
+    assert any("RuntimeError" in (r.error or "") for r in attach_jobs)
