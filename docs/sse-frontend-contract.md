@@ -4,7 +4,7 @@
 `POST /api/conversations/{conversationId}/chat` 으로 그대로 중계하며 `done` 에 `messageId` 를
 주입한다(api-spec v2.2.0 §1-1/§2-1). 근거 코드: `app/api/routes.py`, `app/schemas/response.py`,
 `app/schemas/enums.py`, `app/query/formatter.py`, `app/api/errors.py`. 정본 계약은
-`docs/api-spec.md`(현행 **v2.5.0**) — SSE 7종 이벤트 계약은 v2.2.0 이후 불변이다.
+`docs/api-spec.md`(현행 **v2.6.0**) — SSE 7종 이벤트 계약은 v2.2.0 이후 불변이다.
 
 ---
 
@@ -20,8 +20,8 @@
 | 필드 | 타입 | 필수 | 기본값 | 설명 |
 |---|---|---|---|---|
 | `question` | string | Y | — | 사용자 자연어 질문 (최소 1자) |
-| `userId` | string | Y | — | ACL Pre-filtering 사용자 식별자 |
-| `groups` | string[] | Y | `[]` | 사용자 그룹 — ACL `should`-OR 필터 |
+| `userId` | string | Y | — | ACL Pre-filtering 사용자 식별자(3단계 = Confluence accountId, 예 `712020:...` — v2.6.0) |
+| `groups` | string[] | Y | `[]` | 사용자 그룹 = **`groupId` 배열**(3단계 — v2.6.0. 2단계 데모는 group name 고정값). ACL `should`-OR 필터. **빈 배열 허용** — group 미소속 사용자는 `userId` 로 user-level/공개 페이지 매칭(fail-closed 는 `userId` 만) |
 | `conversationId` | string | N | null | 멀티턴 대화 컨텍스트 ID |
 | `history` | array | N | `[]` | 이전 대화 이력 `[{ "role": "user"\|"assistant", "content": "..." }]` (BFF가 DB에서 조회) |
 | `stream` | boolean | N | `false` | true면 토큰 단위 스트리밍, false면 단일 `token` 1회 송신. **BFF는 항상 true로 호출**(api-spec v2.4.0 §2-1). PoC 환경(OpenAI 키 없음)에서는 true여도 자동으로 비스트리밍 fallback |

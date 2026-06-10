@@ -1,6 +1,6 @@
 # LINA API Spec
 
-> 버전: v2.5.0
+> 버전: v2.6.0
 > 기준: 중간 발표(4주차) 데모 범위 + 이후 확장 계획
 > 전제: 중간 발표 시 인증 하드코딩, 스페이스 고정, 로그인 제외
 > 기획서 버전: v2.1.7 (Authorization Server 분리, 사용자 단위 검색 반영)
@@ -17,6 +17,7 @@
 | v2.3.0 | 2026-05-29 | **§4(5~7주차) API 명세 작성** — 구현 전 명세 완성. 인증(`/api/auth/login`·`/api/auth/callback`·`/api/auth/refresh`·`/api/auth/logout`·`/api/users/me`)을 **FE-facing 계약**으로 작성: **`Authorization: Bearer` 세션 JWT**(로그인/갱신 응답으로 access+refresh 발급, HttpOnly 쿠키 미사용), Confluence OAuth 위임(기획서 §6.5), JWT 서명·access TTL·Refresh 저장은 `TBD(3단계)`. 관리자 대시보드: `GET /api/admin/feedback` 응답 신설(긍정/부정 비율·추이·부정 원문 QCA 매핑), `users` 에 접근 가능 스페이스/페이지/첨부 수 보강, `/api/admin/*` ADMIN 전용(미인증 401·일반 403), 공통 쿼리 파라미터(`period`/`from`/`to`/`page`/`size`, **제안**)(기획서 §6.7). `/api/admin/*` ADMIN 권한을 §1-4 수집 API 에도 명시. §3 호출 흐름 다이어그램을 §4(인증·관리자·미리보기)까지 포함해 진짜 '전체'로 확장. 대화 목록 응답에서 `messageCount` 제거(기획서·FE 실수요 근거 약함 — 필요 시 재도입). **§2-1 RAG 질의 입력 명세 정밀화**: 요청/응답 분리 표기, `Request Header` 표·필드 표(Required) 정형화, `stream`(기본 false, BFF는 항상 true) 필드 명시, `history[].role` 을 RAG 관용 **소문자**(`user`/`assistant`)로 매핑(Enum 정책 예외 추가, BFF boundary 변환), `groups`/`spaceKey` **fail-closed**, RAG `done: {}` → BFF `messageId` 채움(경계 가공). SSE `error` 이벤트는 RAG·BFF·FE 모두 `errorCode` 단일 키 동일 — passthrough(이전 "code→errorCode 매핑" 노트는 ML팀 spec의 generic placeholder를 잘못 읽은 것, 정정). 메시지 `role` 저장 표기를 `USER`/`ASSISTANT` → **`user`/`assistant`** (LLM/OpenAI 산업 표준)로 통일 — Enum 정책 예외 재분류, RAG boundary 매핑 제거. **admin-only ingestion 자격증명 모델 확정**: admin 도 동일 Confluence OAuth 로 로그인하고, ingestion 도 admin OAuth access_token + Atlassian Admin Key 헤더(`Atl-Confluence-With-Admin-Key: true`) 조합 사용. §1-4 에 `POST /api/admin/key/activate` (Admin Key 60분 활성화) 신설, §2-2 `/ml/ingest` `accessToken` 시맨틱을 "admin OAuth access_token" 으로 명확화. OAuth Bearer + Admin Key 헤더 동작은 3단계 구현 시 검증 게이트. **대화 검색 endpoint 신설**: `GET /api/conversations/search` (§1-2) — 본인 대화의 `messages.content` 본문 검색, 결과는 대화 단위로 묶고 매칭 메시지 샘플(최대 3개) + `matchCount` 동반. 하이라이트는 **plain `snippet` + `matchPositions: [[start, end]]`** (서버는 HTML 미생성, FE 렌더 책임 — XSS 안전성). `q` 검증: trim 후 길이 2~50 (미만/초과 시 `400 INVALID_SEARCH_QUERY`). Common `ErrorCode` enum 에 `INVALID_SEARCH_QUERY` 추가 (도메인 특화 코드 최초 사례 — 사용처 명확할 때만 허용 정책). **`/ml/query` `spaceKey` Required → Optional**: RAG 챗봇 UX 는 "사용자가 매번 스페이스를 고르지 않고, 질문만 던지면 알아서 권한 가능한 모든 콘텐츠에서 답변" 이 자연스러움. 따라서 `spaceKey` 는 누락 시 cross-space 검색(`userId`/`groups` ACL 만 적용), 지정 시 특정 스페이스로 좁힘. **ACL fail-closed 게이트에서 `spaceKey` 제거** — ACL 이 아닌 스코프 필드이므로 누락은 차단 사유가 아님. `userId`/`groups` 만 fail-closed. Common §spaceKey 정의에 질의(선택)/수집(필수) 차이 명시. `/ml/ingest`·`/api/admin/ingest` 의 `spaceKey` 는 admin 이 수집 대상 명시해야 하므로 **Required 유지**. 관련: ML 팀과 `/ml/query` body schema 변경 협의 필요 (2단계 demo 는 `lina.demo.fixed-space-key=CPC` 전달 유지 — 기존 색인 데이터와 정합). **2026-06-02 회의 결정 추가 반영**: (1) **`/api/admin/ingest` 가 내부적으로 key activate 묶음 처리** — admin "데이터 인제스천 파이프라인" 버튼 하나로 키 발급+수집 일괄 트리거(BFF 가 key 활성 미확인 시 자동 `POST /api/v2/admin-key` 호출 후 ingest). `/api/admin/key/activate` 는 수동/테스트용 endpoint 로 명시. (2) **Admin Key 말소 책임 = ML(Data Ingestion) 측** — ingestion 완료 직후 ML 이 Atlassian admin-key deactivate 호출, 60분 TTL 은 fallback. BE 는 deactivate 책임 없음 — ML 팀 협의 필요. (3) **`/api/auth/login?mode=admin` 쿼리 파라미터 도입** — FE "Continue with Confluence for Admin" 버튼이 `?mode=admin` 전달. callback 에서 `state` 에 보관된 mode 확인해 `users.role != ADMIN` 이면 `403 FORBIDDEN` 으로 차단(클라이언트 우회 방지 위해 BE 가 state 에 mode 직렬화). |
 | v2.4.0 | 2026-06-04 | **`spaceKey` 전면 제거 — LINA API 표면에서 사용 안 함**. v2.3.0 에서 `/ml/query` 를 Optional 로 만들었던 결정의 연장: 실제 검토 결과 `/ml/ingest`·`/api/admin/ingest` 도 admin Key 로 admin 이 접근 가능한 **모든 스페이스를 일괄 크롤**하는 모델이라 spaceKey 가 불필요(2026-06-04 결정). 결과: (1) `/ml/query` Request Body 에서 `spaceKey` 필드 삭제. cross-space 검색이 유일한 모드(`userId`/`groups` ACL 적용). (2) `/ml/ingest` Request Body 에서 `spaceKey` 필드 삭제. ML 이 `accessToken`+`cloudId` 와 Admin Key 헤더로 접근 가능 스페이스 iterate. (3) `/api/admin/ingest` Request Body 가 `{ mode }` 로 축소(생략 시 `"full"`). 버튼 1회 = 전체 수집. (4) Common §스페이스 식별자 갱신 — `spaceKey` 항목 제거, `spaceId`/`spaceName` 만 유지(messages.sources 출처 표시용). spaceKey 는 Confluence URL/내부 식별자로만 존재한다는 노트 추가. (5) `groups`/`spaceKey` fail-closed 표현 정리 — `userId`/`groups` 만 fail-closed. **ML 팀 협의 필요**: `/ml/query`·`/ml/ingest` body schema 변경(`spaceKey` 제거). ML PoC 의 `allowed_groups = ["space:{key}"]` 합성 모델은 ADR 0001 §2.1 의 페이지-단위 권한 모델로 자연스럽게 마이그레이션됨. 2단계 demo 영향: `lina.demo.fixed-space-key` 설정 deprecation. **Admin Key deactivate 책임 ML → BE 이동 (2026-06-04)**: 회의(2026-06-02) 에서 ML 담당으로 결정됐던 admin-key deactivate 호출을 BE 로 이전 — 깔끔한 책임 분리. 구현: BFF 가 `/api/admin/ingest` 트리거 직후 Virtual Thread watcher 를 띄워 `/ml/ingest/status/{jobId}` 를 폴링하다가(`lina.admin.ingest-watch-interval-ms`, 기본 30s) `COMPLETED`/`FAILED` 감지 시 auth-server 내부 `POST /internal/admin/key/deactivate` 호출. ML 인터페이스는 변경 없음. BFF 재시작 시 watcher 손실 — 60분 TTL 이 fallback (영속 watcher 는 PoC 범위 밖). |
 | v2.5.0 | 2026-06-05 | **Admin Key 말소 흐름을 BFF polling watcher 에서 RabbitMQ completion event 기반으로 대체**. `/api/admin/ingest` 는 RabbitMQ 기반 비동기 수집 플로우로 정의한다. BFF 는 요청 수신 시 auth-server 내부 API 로 Admin Key 를 activate 한 뒤 BFF 또는 Data Ingestion Pipeline 을 통해 ingest job 을 RabbitMQ 에 발행하고, completion event consumer 가 `COMPLETED`/`FAILED` 이벤트를 consume 하면 auth-server `POST /internal/admin/key/deactivate` 를 호출한다. Data Ingestion Worker 는 MQ payload 에서 credential 을 받지 않고, `adminUserId` 로 auth-server 내부 credential 조회 API 를 호출해 admin OAuth `accessToken` + `cloudId` 를 함께 얻는다. RabbitMQ payload 는 `jobId`, `adminUserId`, `mode`, `status`, timestamp, error 요약 등 작업 식별/상태 정보만 포함하며 `accessToken`/`refreshToken`/`cloudId` 같은 Confluence credential set 을 포함하지 않는다. deactivate 대상은 OAuth token 이 아니라 Atlassian Admin Key 활성 상태이며, `jobId` 기준 중복 completion event 에 대해 idempotent 하게 처리한다. BFF 재시작/consumer 장애는 RabbitMQ durable queue 의 completion event 재처리로 복구하고, Admin Key 60분 TTL 은 최종 fallback 으로 유지한다. deactivate 실패는 초안 기준 최대 5회 재시도 후 DLQ 이동, DLQ 는 원인 조치 뒤 동일 event 재발행 또는 운영자 수동 deactivate 로 복구한다. **§2-5 에 Data Ingestion Worker → auth-server 내부 credential 조회 API 계약**(`GET /internal/auth/admin-confluence-credential`)을 추가했다. |
+| v2.6.0 | 2026-06-10 | **§2-1 `/ml/query` `userId`/`groups` 식별자 명세 정합화** — 3단계 확정(`userId`=Confluence accountId, `groups`=`groupId` 배열, Qdrant `allowed_groups` 정합)에 맞춰 필드 정의·예시를 정정. 예시값을 데모(`user-001`/group name `Cloud-Control-Center`) → 실제 형식(accountId `712020:...` / groupId)으로 교체하고, "2단계 데모는 `lina.demo.*` 고정값" 노트 추가. §4-1 `users/me`·§4-2 `admin/users` 응답 예시의 `userId` 도 accountId 로 통일. **ACL fail-closed 정책 변경**: `userId` 만 fail-closed, **`groups` 빈 배열 허용**(Confluence group 미소속 사용자도 `userId` 로 user-level/공개 페이지 매칭). (`docs/db-schema.md` §6.1·ADR 0001) |
 
 ---
 
@@ -684,8 +685,8 @@ Request Body 없음 (admin 의 OAuth access_token 은 서버 측에서 사용).
 ```json
 {
   "question": "지난번 S3 버킷 권한 오류 때 어떻게 해결했어?",
-  "userId": "user-001",
-  "groups": ["Cloud-Control-Center"],
+  "userId": "712020:91b5112c-7b2a-4c3d-8e9f-0a1b2c3d4e5f",
+  "groups": ["g_a1b2c3d4", "g_e5f6a7b8"],
   "conversationId": "conv-uuid-001",
   "history": [
     { "role": "user", "content": "S3 관련 장애 이력 알려줘" },
@@ -695,11 +696,13 @@ Request Body 없음 (admin 의 OAuth access_token 은 서버 측에서 사용).
 }
 ```
 
+> 위 `userId`/`groups` 는 **3단계 실제값**(`userId`=Confluence accountId, `groups`=`groupId` 배열). **2단계 데모**는 `lina.demo.fixed-user-id`(`user-001`)·`lina.demo.fixed-groups`(group **name**, 예 `Cloud-Control-Center`) 고정값을 전달한다 — 색인측도 3단계부터 `allowed_groups` 를 `groupId` 로 적재해야 매칭(ADR 0001).
+
 | Name             | Type     | Required | Description                                                                                                                                                                                          |
 | ---------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `question`       | String   | ✅       | 사용자 자연어 질문(최소 1자)                                                                                                                                                                         |
-| `userId`         | String   | ✅       | JWT `sub` 에서 추출한 사용자 식별자(ACL Pre-filtering)                                                                                                                                               |
-| `groups`         | String[] | ✅       | 사용자 그룹(ACL `should`-OR 필터). **빈 배열 금지** — BFF fail-closed                                                                                                                                |
+| `userId`         | String   | ✅       | JWT `sub`(= **Confluence accountId**, 예 `712020:...`)에서 추출한 사용자 식별자(ACL Pre-filtering)                                                                                                                                               |
+| `groups`         | String[] | ✅       | 사용자 그룹 = **`groupId` 배열**(Qdrant `allowed_groups` 와 동일 vocabulary). ACL `should`-OR 필터. **빈 배열 허용**(group 미소속 사용자 — `userId` 로 매칭). fail-closed 는 `userId` 기준만                                                                            |
 | `conversationId` | String   | —        | 대화 컨텍스트. 없으면 단발성 질의(new topic)로 처리                                                                                                                                                  |
 | `history`        | Object[] | —        | 이전 대화 이력(멀티턴). BFF 가 MongoDB `messages` 에서 `lina.rag.history-turns`(기본 10) 만큼 조회해 전달                                                                                            |
 | `stream`         | Boolean  | —        | 기본 `false`. **BFF 는 항상 `true` 로 호출**(토큰 스트리밍). PoC 환경(OpenAI 키/generator 없음)에서는 `true` 라도 자동 비-streaming fallback 으로 `token` 이벤트가 1회로 내려올 수 있음 — §1-1 참조 |
@@ -713,7 +716,7 @@ Request Body 없음 (admin 의 OAuth access_token 은 서버 측에서 사용).
 
 > **`history[].role` 값 체계**: 메시지 `role` 은 저장(`messages.role`)·외부 응답(§1-2)·RAG 와이어(`/ml/query` `history[].role`) 모두 `user`/`assistant` lowercase 로 통일한다 — LLM/OpenAI 산업 표준(Common Enum 값 표기 정책의 명시된 예외). **boundary 변환 없음** — 저장값을 그대로 RAG 에 전달.
 
-> **ACL fail-closed (BFF 측 강제)**: `userId` 가 비어 있거나 `groups` 가 비어 있으면(`[]`) BFF 는 `/ml/query` 호출을 **막고** SSE `error`(`errorCode: UNAUTHORIZED`)로 종료한다 (`backend/CLAUDE.md` §6 "ACL 필터 없이 RAG 호출 금지"). RAG 자체 검증이 빈 값을 허용하더라도 BFF 가 게이트한다.
+> **ACL fail-closed (BFF 측 강제)**: `userId` 가 비어 있으면 BFF 는 `/ml/query` 호출을 **막고** SSE `error`(`errorCode: UNAUTHORIZED`)로 종료한다 (`backend/CLAUDE.md` §6 "ACL 필터 없이 RAG 호출 금지"). **`groups` 빈 배열(`[]`)은 허용**(2026-06-10 정책) — Confluence group 미소속 사용자도 `userId` 로 user-level/공개 페이지가 매칭되기 때문(가시성 = `allowed_users ∋ userId` **OR** `allowed_groups ∩ groups`). 즉 fail-closed 게이트는 `userId` 기준만이다.
 
 > **camelCase**: 와이어 필드는 모두 camelCase. RAG(FastAPI)는 `populate_by_name=True` 로 테스트 편의상 snake_case 도 허용하나, 생산 클라이언트(BFF)는 camelCase 만 사용한다.
 
@@ -1063,7 +1066,7 @@ FE 는 보관한 access/refresh 토큰을 폐기하고, BFF 는 Authorization Se
   "code": 200,
   "message": "사용자 정보 조회 성공",
   "data": {
-    "userId": "user-001",
+    "userId": "712020:91b5112c-7b2a-4c3d-8e9f-0a1b2c3d4e5f",
     "name": "이다연",
     "email": "dayeon@example.com",
     "role": "USER",
@@ -1128,7 +1131,7 @@ FE 는 보관한 access/refresh 토큰을 폐기하고, BFF 는 Authorization Se
     "dailyActiveUsers": 12,
     "users": [
       {
-        "userId": "user-001",
+        "userId": "712020:91b5112c-7b2a-4c3d-8e9f-0a1b2c3d4e5f",
         "name": "이다연",
         "accessibleSpaceCount": 5,
         "accessiblePageCount": 320,
