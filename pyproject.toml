@@ -5,7 +5,7 @@ description = "척척학사(LINA) Confluence 기반 RAG 챗봇 서비스의 RAG 
 requires-python = ">=3.11,<3.12"
 dependencies = [
     # --- AI Agents (ai-agent 레포에서 설치 — in-repo vendoring 대체)
-    "lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@main",
+    "lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.0",
     # --- API / 런타임 ---
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
