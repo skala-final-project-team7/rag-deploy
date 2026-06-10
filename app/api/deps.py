@@ -170,6 +170,9 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
     from answer_generation_agent.generation.answer_generation import OpenAIAnswerLLMProvider
     from answer_verification_agent.config import AnswerVerificationConfig
     from answer_verification_agent.evaluator.providers import OpenAIEvaluatorProvider
+    from query_routing_agent.config import QueryRoutingConfig
+    from query_routing_agent.llm import OpenAIRoutingLLMProvider
+
     from app.ingestion.embedder.dense import E5DenseEmbedder
     from app.ingestion.embedder.sparse import BM25SparseEmbedder
     from app.query.openai_transport import (
@@ -180,8 +183,6 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
     from app.query.reranker.cross_encoder import CrossEncoderRerankerImpl
     from app.query.routing_transport import build_openai_routing_transport
     from app.storage.chunk_lookup import MongoChunkTextLookup
-    from query_routing_agent.config import QueryRoutingConfig
-    from query_routing_agent.llm import OpenAIRoutingLLMProvider
 
     dense = E5DenseEmbedder(settings.dense_embedding_model)
     sparse = BM25SparseEmbedder()

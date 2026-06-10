@@ -35,10 +35,6 @@
 
 from typing import Any
 
-from app.ingestion.vector_store import CONTENT_POOL, LABEL_POOL, TITLE_POOL
-from app.metrics import intent_classification_total
-from app.schemas.enums import Intent, LlmModel
-from app.schemas.rag_state import RagState
 from query_routing_agent.config import QueryRoutingConfig
 from query_routing_agent.llm import (
     FakeRoutingLLMProvider,
@@ -54,6 +50,11 @@ from query_routing_agent.schemas import (
     HistoryDecisionLabel,
     IntentLabel,
 )
+
+from app.ingestion.vector_store import CONTENT_POOL, LABEL_POOL, TITLE_POOL
+from app.metrics import intent_classification_total
+from app.schemas.enums import Intent, LlmModel
+from app.schemas.rag_state import RagState
 
 # IntentLabel(agent enum, 영어 snake_case) → Intent(rag enum, 한국어) 매핑 표.
 # UNKNOWN 은 rag Intent 에 대응값이 없으므로 stub 정합으로 OPERATION_GUIDE 로 fallback.

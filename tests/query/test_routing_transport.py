@@ -12,12 +12,12 @@ import types
 from typing import Any
 
 import pytest
-
-from app.query.routing_transport import build_openai_routing_transport
 from query_routing_agent.llm.providers import (
     OpenAITransportError,
     RoutingClassificationRequest,
 )
+
+from app.query.routing_transport import build_openai_routing_transport
 
 
 class _FakeMessage:

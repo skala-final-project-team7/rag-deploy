@@ -10,12 +10,12 @@ sources·used_llm 을 채우고 RagState 에 담는다. agent LLM 호출은 Fake
 from datetime import datetime
 
 import pytest
-
 from answer_generation_agent.config import AnswerGenerationConfig
 from answer_generation_agent.generation.answer_generation import (
     AnswerProviderError,
     FakeAnswerLLMProvider,
 )
+
 from app.query.generator import manage_generator
 from app.query.verifier import verify_answer_rules
 from app.schemas.chunk import Chunk, ChunkMetadata

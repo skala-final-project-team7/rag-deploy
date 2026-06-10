@@ -49,6 +49,14 @@
     ``status`` 이벤트 송신(스펙 §1-1 불변식 #1). (3) SSE ``error.message`` 를 errorCode 별
     고정 안내 문구로 통일(내부 예외 원문은 서버 로그 전용). (4) 보수 가드 토글을
     streaming 경로에도 전달(``openai_streaming`` 의 plain-text 정합 가드).
+  - 2026-06-10, **A5 — backend-template 정합(append-only 토큰 확정)**. BFF ChatService
+    (backend-template@eafd6b3)가 token.content 를 무조건 이어 붙여 영속함을 확인 —
+    "빈 token=클리어"·"차단문 token 재전송=덮어쓰기" 시맨틱은 BFF/FE 에 존재하지 않아
+    (1) Rate Limit fallback 의 빈 clear token 제거, 부분 답변이 이미 송신된 경우 가시적
+    구분 안내문 token 을 1회 송신 후 fallback 답변을 이어 보낸다. (2) 차단 분기의
+    token 재전송 제거 — 차단 신호는 ``verification`` 이벤트(NOT_SUPPORTED·낮은
+    confidenceScore)로 전달되고 BFF 가 그대로 영속한다(렌더링 정책은 FE 소관).
+    비-streaming 경로는 종전대로 차단 안내문이 단일 token 으로 나간다(검증 후 송신).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, FastAPI 0.111+, sse-starlette 2.1+
@@ -140,6 +148,11 @@ def _error_event(code: ErrorCode, message: str) -> dict[str, str]:
     payload = {"errorCode": code.value, "message": message}
     return {"event": "error", "data": json.dumps(payload, ensure_ascii=False)}
 
+
+# A5 — Rate Limit fallback 시 부분 답변과 재생성 답변 사이에 끼워 보내는 구분 안내문.
+# BFF/FE 는 token 을 append-only 누적하므로(backend-template ChatService 확인) 이 문구가
+# 화면·영속 본문에 그대로 포함된다 — 자연스러운 한국어 연결문으로 유지한다.
+_FALLBACK_RESTART_NOTICE = "\n\n(일시적인 응답 한도로 답변을 처음부터 다시 생성합니다)\n\n"
 
 # SSE error.message 는 사용자 노출용 고정 안내 문구만 보낸다(BFF→FE passthrough — §2-1).
 # 내부 예외 원문(상류 응답 본문·내부 URL·request-id 등 포함 가능)은 서버 로그 전용.
@@ -501,8 +514,7 @@ async def _streaming_event_stream_inner(
             accumulated_tokens.append(token_chunk.text)
             yield _token_event(token_chunk.text)
     except RateLimitError:
-        # 설계서 §4.6.5 — 429 시 fallback_model 로 1회 재시도. 부분 토큰을 이미
-        # 송신했다면 UI 가 덮어쓸 수 있도록 빈 token 이벤트로 clear.
+        # 설계서 §4.6.5 — 429 시 fallback_model 로 1회 재시도.
         _LOGGER.warning(
             "answer streaming rate-limited, falling back to fallback_model=%s",
             fallback_model,
@@ -514,8 +526,13 @@ async def _streaming_event_stream_inner(
             reason="rate_limit_error",
         ).inc()
         if accumulated_tokens:
+            # A5 — BFF(backend-template ChatService)는 token.content 를 append-only 로
+            # 누적·영속한다(클리어/덮어쓰기 시맨틱 없음). 따라서 빈 token 으로 clear 를
+            # 기대하지 않고, 이미 송신된 부분 답변과 fallback 재생성 답변 사이에 가시적
+            # 구분 안내문을 1회 송신한다(FE 화면·BFF 영속 모두 자연스러운 연결문이 됨).
+            # 내부 accumulated_tokens 는 비워 검증/제목은 fallback 답변만 대상으로 한다.
             accumulated_tokens.clear()
-            yield _token_event("")
+            yield _token_event(_FALLBACK_RESTART_NOTICE)
         used_model = fallback_model
         async for token_chunk in _iter_offloaded(
             stream_openai_answer(
@@ -562,11 +579,12 @@ async def _streaming_event_stream_inner(
     response.title = await asyncio.to_thread(
         _resolve_title, request, question=state.query, answer=answer
     )
-    # 답변이 차단 분기(BLOCKED_ANSWER_MESSAGE)로 대체된 경우, UI 가 이미 송신된 원본
-    # 토큰을 차단 메시지로 덮어쓰도록 'token' 이벤트를 1회 더 송신한다. 불변식 #2 준수를
-    # 위해 verifying/formatting status 보다 **먼저** 보낸다.
-    if response.answer != answer:
-        yield _token_event(response.answer)
+    # A5 — 차단 분기여도 token 재전송을 하지 않는다. BFF(backend-template ChatService)는
+    # token 을 append-only 로 누적·영속하므로 재전송 시 "원본 답변+차단문" 연결문이
+    # 그대로 저장·표시된다(덮어쓰기 시맨틱 없음 — 확인: 2026-06-10). 차단 신호는 바로
+    # 아래 verification 이벤트(NOT_SUPPORTED + 낮은 confidenceScore)로 전달되며 BFF 가
+    # confidence/verificationResult 를 영속한다. 비-streaming 경로는 검증 후 단일 token
+    # 이라 종전대로 차단 안내문(BLOCKED_ANSWER_MESSAGE)이 답변 본문으로 나간다.
     # feature19 status — verifying → formatting (검증은 위에서 이미 수행, status 는 표시용).
     yield _status_event("verifying")
     yield _status_event("formatting")

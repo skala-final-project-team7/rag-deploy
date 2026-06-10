@@ -18,7 +18,6 @@
 --------------------------------------------------
 """
 
-from app.schemas.rag_state import HistoryDecision, RagState
 from history_manager_agent.config import HistoryManagerConfig
 from history_manager_agent.context import apply_context_policy
 from history_manager_agent.history import normalize_history_input_payload
@@ -30,6 +29,8 @@ from history_manager_agent.llm import (
 )
 from history_manager_agent.question import build_question_result
 from history_manager_agent.schemas import HistoryDecisionLabel
+
+from app.schemas.rag_state import HistoryDecision, RagState
 
 # history-manager-agent 워크플로의 기본 fake provider와 동일 — 실제 LLM 미설정 시의
 # 보수적 기본값(new_topic). 대화 turn이 있을 때만 사용된다.

@@ -11,13 +11,13 @@ from datetime import datetime
 from typing import Any
 
 import pytest
-from prometheus_client import REGISTRY
-
 from answer_generation_agent.config import AnswerGenerationConfig
 from answer_generation_agent.generation.answer_generation import (
     AnswerProviderError,
     FakeAnswerLLMProvider,
 )
+from prometheus_client import REGISTRY
+
 from app.metrics import (
     answer_generation_latency_seconds,
     intent_classification_total,

@@ -346,6 +346,7 @@ def _streaming_client(
     monkeypatch: pytest.MonkeyPatch,
     streaming_tokens: list[str],
     indexed: bool = True,
+    verify_llm_evaluator: Any | None = None,
 ) -> httpx.AsyncClient:
     """운영 streaming 분기 회귀용 클라이언트.
 
@@ -381,6 +382,10 @@ def _streaming_client(
             store=store,
             cache=FakeEmbeddingCache(),
         )
+    deps_kwargs: dict[str, Any] = {}
+    if verify_llm_evaluator is not None:
+        # A5 차단 분기 회귀용 — 기본 Fake(전부 SUPPORTED) 대신 UNSUPPORTED 평가자 주입.
+        deps_kwargs["verify_llm_evaluator"] = verify_llm_evaluator
     deps = QueryGraphDeps(
         dense_embedder=dense,
         sparse_embedder=sparse,
@@ -395,6 +400,7 @@ def _streaming_client(
             temperature=0.2,
             timeout_seconds=45,
         ),
+        **deps_kwargs,
     )
     streaming_graph = build_query_graph_for_streaming(deps)
 
@@ -548,11 +554,16 @@ async def test_query_route_stream_true_rate_limit_falls_back_to_fallback_model(
     events = _parse_sse(resp.text)
     # stream_openai_answer 가 정확히 2회 호출됐다 — primary 1회 + fallback 1회.
     assert call_count["n"] == 2
-    token_payloads = [data for name, data in events if name == "token"]
-    # (부분) + (빈 clear) + 정상 + [#1] = 4 회 token (또는 차단 분기 추가 1회). 최소 3회.
-    assert len(token_payloads) >= 3
-    # 빈 clear token 이 송신됐다 (content="") — UI 가 부분 답변을 덮어쓸 수 있도록.
-    assert "" in [_content(data) for data in token_payloads]
+    token_contents = [_content(data) for name, data in events if name == "token"]
+    # A5(2026-06-10) — BFF 는 token 을 append-only 누적하므로 빈 clear token 은 보내지
+    # 않는다. 대신 부분 답변과 fallback 재생성 사이에 구분 안내문 token 1회.
+    assert "" not in token_contents
+    notice_tokens = [c for c in token_contents if "다시 생성" in c]
+    assert len(notice_tokens) == 1
+    # 순서: (부분) → 안내문 → fallback 토큰들. append-only 누적 결과가 자연스러운 본문.
+    assert token_contents[0] == "(부분)"
+    assert token_contents.index(notice_tokens[0]) == 1
+    assert token_contents[2:] == ["정상", "[#1]"]
 
 
 @pytest.mark.asyncio
@@ -577,16 +588,76 @@ async def test_query_route_stream_true_emits_multiple_token_chunks(
     assert resp.headers["content-type"].startswith("text/event-stream")
 
     events = _parse_sse(resp.text)
-    # token 이벤트는 streaming_tokens 갯수 이상 (검증 차단 분기에서 1회 더 송신 가능).
-    token_count = sum(1 for name, _ in events if name == "token")
-    assert token_count >= len(streaming_tokens)
-    # token content 누적은 streaming_tokens 의 순서를 보존한다.
+    # A5(2026-06-10) — 차단 분기여도 token 재전송이 없으므로 token 은 정확히
+    # streaming_tokens 갯수만큼이다(append-only 계약).
     token_contents = [_content(data) for name, data in events if name == "token"]
-    assert token_contents[: len(streaming_tokens)] == streaming_tokens
+    assert token_contents == streaming_tokens
     # 후행 이벤트 시퀀스 정합 — sources / verification / meta / done.
     # feature19 — status 이벤트가 추가됐으므로 token/status 를 제외하고 단언한다.
     trailing_names = [name for name, _ in events if name not in ("token", "status")]
     assert trailing_names == ["sources", "verification", "meta", "done"]
+
+
+@pytest.mark.asyncio
+async def test_query_route_stream_true_blocked_branch_does_not_resend_token(
+    populated_graph: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A5(2026-06-10) — 차단 분기에서 token 재전송이 없어야 한다(append-only 계약).
+
+    backend-template ChatService 는 token.content 를 무조건 이어 붙여 영속하므로,
+    차단 안내문을 token 으로 재전송하면 "원본 답변+차단문" 이 그대로 저장·표시된다.
+    인용 마커 없는 답변(전 문장 NOT_SUPPORTED → 차단 비율 100%)을 흘려도 token 은
+    스트리밍된 원본뿐이어야 하고, 차단 신호는 verification 이벤트로 전달된다.
+    2단계 평가자는 UNSUPPORTED 스크립트 Fake 로 주입한다(기본 Fake 는 전부 SUPPORTED
+    라 차단이 트리거되지 않음).
+    """
+    from answer_verification_agent.evaluator.providers import FakeEvaluatorProvider
+
+    from app.query.verifier_evaluator import manage_verifier_evaluator
+
+    scripted_provider = FakeEvaluatorProvider(
+        scripted_results={
+            "s1": {
+                "label": "UNSUPPORTED",
+                "score": 0.1,
+                "reason": "context lacks claim",
+                "unsupported_claims": ["300초"],
+            }
+        }
+    )
+
+    def unsupported_evaluator(*, answer: Any, top_chunks: Any, suspicious_sentences: Any) -> Any:
+        # deps.verify_llm_evaluator 는 callable seam(VerifyLLMEvaluator) — provider 를
+        # 감싼 manage_verifier_evaluator 호출로 주입한다(운영 wiring 과 동일 형태).
+        return manage_verifier_evaluator(
+            answer=answer,
+            top_chunks=top_chunks,
+            suspicious_sentences=suspicious_sentences,
+            provider=scripted_provider,
+        )
+
+    # 숫자 토큰(300)이 인용 청크에 없어 1단계 의심 → 2단계 UNSUPPORTED → 차단 비율 100%.
+    streaming_tokens = ["서버는 300초 안에 재시작됩니다."]
+    client = _streaming_client(
+        populated_graph,
+        monkeypatch=monkeypatch,
+        streaming_tokens=streaming_tokens,
+        verify_llm_evaluator=unsupported_evaluator,
+    )
+    async with client as c:
+        resp = await c.post("/ml/query", json=_body(stream=True))
+    assert resp.status_code == 200
+
+    events = _parse_sse(resp.text)
+    token_contents = [_content(data) for name, data in events if name == "token"]
+    # 차단 안내문 재전송 없음 — token 은 스트리밍 원본과 정확히 일치.
+    assert token_contents == streaming_tokens
+    # 차단 신호는 verification 이벤트로 — 전 문장 미근거라 NOT_SUPPORTED.
+    verification_payloads = [
+        json.loads(data) for name, data in events if name == "verification"
+    ]
+    assert len(verification_payloads) == 1
+    assert verification_payloads[0]["verificationResult"] == "NOT_SUPPORTED"
 
 
 @pytest.mark.asyncio

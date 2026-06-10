@@ -157,6 +157,7 @@ def patched_real_adapters(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     import answer_generation_agent.generation.answer_generation as generation_module
     import answer_verification_agent.evaluator.providers as verifier_providers_module
+
     import app.ingestion.embedder.dense as dense_module
     import app.ingestion.embedder.sparse as sparse_module
     import app.query.openai_transport as openai_transport_module

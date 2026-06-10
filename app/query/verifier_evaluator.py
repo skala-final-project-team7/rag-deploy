@@ -62,6 +62,7 @@ from answer_verification_agent.verification.input_normalization import (
 from answer_verification_agent.verification.suspicious_selector import (
     SuspiciousSentenceTarget,
 )
+
 from app.metrics import verifier_provider_failure_total
 from app.query.verifier import SentenceCheck
 from app.schemas.chunk import Chunk

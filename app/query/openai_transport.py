@@ -163,9 +163,8 @@ def build_openai_chat_transport(
 
     def _transport(payload: TransportPayload) -> TransportResult:
         # lazy import — openai 패키지가 없는 환경에서도 모듈 import 가 깨지지 않게.
-        from openai import APIError, APIStatusError, APITimeoutError, OpenAI
-
         from answer_generation_agent.generation.answer_generation import OpenAITransportError
+        from openai import APIError, APIStatusError, APITimeoutError, OpenAI
 
         client = OpenAI(api_key=api_key, timeout=float(payload["timeout_seconds"]))
         messages = _normalize_messages(

@@ -4,9 +4,10 @@ manage_history: vendoring한 history-manager-agent 로직을 in-process로 호�
 판단하고 RagState.history_decision에 채운다. agent LLM 호출은 FakeHistoryLLMProvider로 대체.
 """
 
+from history_manager_agent.llm import FakeHistoryLLMProvider
+
 from app.query.history import manage_history
 from app.schemas.rag_state import HistoryDecision, HistoryTurn, RagState
-from history_manager_agent.llm import FakeHistoryLLMProvider
 
 
 def _state(

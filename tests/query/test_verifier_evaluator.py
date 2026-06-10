@@ -10,12 +10,12 @@ list 를 채워주는 흐름이며, 본 어댑터는 stub 시그니처와 동일
 from datetime import datetime
 
 import pytest
-
 from answer_verification_agent.config import AnswerVerificationConfig
 from answer_verification_agent.evaluator.providers import (
     EvaluatorProviderError,
     FakeEvaluatorProvider,
 )
+
 from app.metrics import verifier_provider_failure_total
 from app.query.verifier import SentenceCheck
 from app.query.verifier_evaluator import manage_verifier_evaluator

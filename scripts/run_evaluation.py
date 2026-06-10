@@ -411,6 +411,7 @@ def _run_debug_verify(query: str, *, use_real: bool) -> int:
     from answer_verification_agent.verification.suspicious_selector import (
         SuspiciousSentenceTarget,
     )
+
     from app.api.deps import build_poc_deps, build_real_deps
     from app.config import get_settings
     from app.pipeline.query_graph import build_query_graph
@@ -665,6 +666,7 @@ def _run_debug_leniency(query: str, *, use_real: bool) -> int:
     from answer_verification_agent.verification.suspicious_selector import (
         SuspiciousSentenceTarget,
     )
+
     from app.api.deps import build_poc_deps, build_real_deps
     from app.config import get_settings
     from app.pipeline.query_graph import build_query_graph
