@@ -13,6 +13,8 @@
   - 2026-05-18, feature11 통합 후속 — BM25-lite + 인메모리 ACL 매칭을
     build_poc_deps + build_query_graph + run_query 끝-끝 호출로 교체. SSE 5종
     페이로드 시각화 + RETRIEVAL_EMPTY / 저신뢰 / 검증 차단 분기 표시
+  - 2026-06-10, 코드 리뷰 재점검(P4) — LOW_CONFIDENCE 데모 임계 낡은 값(20→55,
+    formatter.LOW_CONFIDENCE_SCORE) 정정.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x

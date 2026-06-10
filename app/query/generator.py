@@ -31,6 +31,8 @@
   - 2026-06-04, 문서 정합 — (A)SSE 토큰 스트리밍 / (B)운영 OpenAI HTTP transport /
     (C)Rate Limit fallback 이 이후 세션에 구현 완료됨을 반영(하단 "구현 현황").
     (D)(E)는 agent 패키지 담당으로 이관 유지.
+  - 2026-06-10, 코드 리뷰 재점검(A8) — Source 생성 시 page_id=metadata.page_id 주입
+    (sources[].pageId 빈 문자열 송신 방지 — BFF 영속 필드).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, Pydantic 2.7+

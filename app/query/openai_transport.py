@@ -32,6 +32,8 @@
     한계: OpenAI strict json_schema 는 ``minItems`` 미지원이라 "≥1 인용"을 구조적으로
     강제하진 못한다(빈 배열 가능). 구조 보장 + description 으로 다중 인용을 유도하며,
     효과는 per-cited-chunk 환각 재평가로 확인한다.
+  - 2026-06-10, 코드 리뷰 재점검(A7) — _transport 가 호출마다 생성하는 OpenAI client 를
+    finally 에서 close(커넥션 풀 누수 방지).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, openai>=1.30 (pyproject.toml 의존성).

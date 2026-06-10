@@ -13,6 +13,8 @@
   - 2026-05-19, 최초 작성, feature17a — 4종 LLM 커스텀 메트릭 정의:
     llm_fallback_total / verification_status_total /
     answer_generation_latency_seconds / intent_classification_total.
+  - 2026-06-10, 코드 리뷰 재점검(A6) — verifier_provider_failure_total 카운터 추가
+    (검증 2단계 provider 실패 fail-open 관측 지점).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, prometheus_client>=0.20 (prometheus-fastapi-instrumentator 의 transitive).

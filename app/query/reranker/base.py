@@ -12,6 +12,8 @@
 변경사항 내역 (날짜, 변경목적, 변경내용 순)
   - 2026-05-18, 최초 작성, feature9-B-1 — CrossEncoderReranker ABC +
     FakeCrossEncoderReranker
+  - 2026-06-10, 코드 리뷰 재점검(P4) — select_reranked 임계값 낡은 docstring
+    (0.30/0.20 → 0.65/0.55, feature17c 재조정 기준) 정정.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x

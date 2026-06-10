@@ -98,7 +98,7 @@ payload 필드로 복원한다.
 > - **(B) `allowed_groups`/`allowed_users`(페이지별) — 채택(admin key on).** Ingestion 이 Admin Key 로
 >   page-level read restriction 을 조회해 `allowed_groups`/`allowed_users`를 산출한다
 >   (`ConfluenceRestrictionAclProvider`, ingestion 레포). restriction 이 비어 있는 페이지는
->   `atlassian_empty_restriction_policy`(기본 `allow_authenticated`)로 처리한다.
+>   `atlassian_empty_restriction_policy`(기본 `mark_missing` — fail-closed, 2026-06-10 코드 리뷰 A2)로 처리한다.
 >
 > **모든 인증 사용자 허용 sentinel (공유 계약 — ADR 0003).** Ingestion 의 `allow_authenticated`
 > 정책은 restriction 없는 페이지의 `allowed_groups`에 sentinel 토큰(`atlassian_public_acl_group`,

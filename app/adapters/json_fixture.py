@@ -10,6 +10,8 @@
   - 2026-05-15, 최초 작성, feature2 — JsonFixtureSourceAdapter + Atlassian 포맷 매핑
   - 2026-05-17, 코드 리뷰 후속(P1-3) — download_url을 file:// URI(사용자 노출용)로 두고,
     청커가 직접 열 로컬 경로는 local_path 필드에 분리 매핑 (ADR-2026-001)
+  - 2026-06-10, 코드 리뷰 재점검(P1-3) — 첨부 docstring 정합: extracted_text 는 빈 값 유지,
+    분석기가 빈 텍스트+local_path 를 파일 기반 추출(chunk_attachment)로 위임함을 명시.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, Pydantic 2.7+

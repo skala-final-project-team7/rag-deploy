@@ -12,6 +12,8 @@
   - 2026-05-18, 최초 작성, feature9-B-3 — cross_encoder_rerank 노드 + Source 매핑
   - 2026-05-18, 풀 텍스트 lookup 후속 — ChunkTextLookup 주입으로 첨부 청크의
     Source.download_url을 채우도록 확장. lookup이 None이면 동작 무변경.
+  - 2026-06-10, 코드 리뷰 재점검(A8·P4) — Source 생성 시 page_id 주입(BFF 영속 필드) +
+    LOW_CONFIDENCE_SCORE 낡은 주석(20→55) 정정.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x
