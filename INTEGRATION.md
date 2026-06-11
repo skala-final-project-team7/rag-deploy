@@ -11,7 +11,7 @@
 ## 2. 에이전트 의존성
 ```toml
 # pyproject.toml [project].dependencies
-"lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.0",
+"lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.1",
 ```
 app은 4개 에이전트를 **top-level 패키지명**으로 import한다(소스 30곳): `query_routing_agent`, `history_manager_agent`, `answer_generation_agent`, `answer_verification_agent`. ai-agent가 이 이름을 그대로 노출하면 import는 **무변경**으로 해결된다.
 
@@ -23,13 +23,23 @@ app은 4개 에이전트를 **top-level 패키지명**으로 import한다(소스
 |---|---|---|
 | 1 | 배포 이름 충돌 — `name = "lina-rag-pipeline"` (= rag-deploy 와 동일) | `[project].name = "lina-ai-agents"` ✅ |
 | 2 | `app` 패키지 충돌 — `packages.find.include`에 `"app*"` 포함 | `app*` 제거, 6개 에이전트 패키지만 노출 ✅ |
-| 3 | 핀 가변 — release tag 없음(`@main`) | 태그 `v0.1.0` 발행, 본 레포 의존성 핀 `@v0.1.0` 으로 교체 완료 ✅ |
+| 3 | 핀 가변 — release tag 없음(`@main`) | 태그 `v0.1.0` 발행 ✅ (현재 핀은 `@v0.1.1` — §3b) |
 
 > top-level 에이전트 패키지명 6종은 무변경 — app 코드의 `from query_routing_agent ...` import 그대로 동작.
 
+## 3b. ✅ ai-agent v0.1.1 핀 확정 (2026-06-11)
+ai-agent 태그 **`v0.1.1`**(= main `fbe522d`, annotated) 확정에 따라 핀을 `@v0.1.0` → **`@v0.1.1`** 로 교체했다.
+
+- **본 레포(rag) 영향 없음 — 코드 무변경.** 본 레포가 import 하는 4개 에이전트
+  (`query_routing_agent`/`history_manager_agent`/`answer_generation_agent`/`answer_verification_agent`)는
+  v0.1.0↔v0.1.1 간 **diff 0줄**(git diff 직접 확인). v0.1.1 변경분은 `data_ingestion_agent`/
+  `data_sync_agent`(ingestion-deploy 소비)와 docs/tests 뿐이다.
+- import 정합 재검증: 본 레포가 쓰는 에이전트 심볼 전수(AST 정적 검사)가 v0.1.1 트리에 존재 확인.
+- 적용 후 `pip install -e ...` 재실행으로 설치본 갱신 필요.
+
 ## 4. 빌드/검증 (Python 3.11)
 ```bash
-pip install -e '.[embedding,ingestion,dev]'   # ai-agent v0.1.0 + 청커 파서(fitz 등) + ruff/pytest
+pip install -e '.[embedding,ingestion,dev]'   # ai-agent v0.1.1 + 청커 파서(fitz 등) + ruff/pytest
 python -c "import app.api.main"    # 에이전트 import 해결 = ai-agent 설치 확인
 ./scripts/verify.sh                # format → lint → test
 ```

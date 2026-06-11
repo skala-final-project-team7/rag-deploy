@@ -14,7 +14,7 @@
 
 본 레포는 SKALA Final Project Team 7의 RAG 파이프라인 **배포용** 모듈이다. 답변 생성기·
 질의 라우터 등 LLM 호출이 일어나는 Agent 노드는 별도 `ai-agent` 레포가 소유하며,
-`lina-ai-agents @ v0.1.0` 외부 의존성으로 설치된다(vendoring 없음 — `INTEGRATION.md` §1~§3).
+`lina-ai-agents @ v0.1.1` 외부 의존성으로 설치된다(vendoring 없음 — `INTEGRATION.md` §1~§3).
 
 ---
 
