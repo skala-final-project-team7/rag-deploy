@@ -69,6 +69,10 @@
     gpt-4o-mini)를 history_provider/history_config 로 주입한다. 종전에는 라우터·
     생성기·검증기 3종만 wiring 되어 운영 모드에서도 히스토리 분류가 Fake(항상
     new_topic)로 동작 — 멀티턴 contextualized question 이 만들어지지 않았다.
+  - 2026-06-11, 배포 전 점검 fix — build_real_deps 에 RAG_OPENAI_API_KEY 누락 조기 경고
+    (ERROR 로그) 추가. provider 별 키 검증 시점·메시지가 제각각이라 누락 원인 식별이
+    느리던 것을 모델 로드 전에 한국어로 명확화(hard-fail 은 기존 provider 생성자 책임 —
+    단위 테스트의 빈 SecretStr 조립 계약 보존).
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, FastAPI 0.111+
@@ -79,6 +83,7 @@
 --------------------------------------------------
 """
 
+import logging
 from functools import partial
 from pathlib import Path
 
@@ -94,6 +99,8 @@ from app.schemas.chunk import Chunk
 from app.storage.chunk_lookup import FakeChunkTextLookup
 from app.storage.mongo_cache import FakeEmbeddingCache
 from app.storage.qdrant_client import QdrantPoolStore
+
+_LOGGER = logging.getLogger(__name__)
 
 # PoC 임베딩 차원 — Fake에서는 코사인 유사도 계산만 정합하면 충분하므로 64로 가볍게.
 # 실 어댑터(E5)는 1024차원으로 별도 부트스트랩.
@@ -169,6 +176,20 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
     """
     settings = settings or get_settings()
 
+    # 배포 전 점검 fix(2026-06-11) — 운영 모드 필수 시크릿 누락의 조기 가시화. 키가 비면
+    # 어차피 답변 생성기(ProviderConfigurationError)·검증기(EvaluatorProviderError)가 아래
+    # 생성 시점에 즉시 실패하지만, 그 예외는 라이브러리 메시지라 원인 식별이 느리다. 모델
+    # 로드(약 2.4 GB)·lazy import 보다 앞에서 명확한 한국어 ERROR 로 안내한다. (raise 가
+    # 아닌 로그인 이유: 단위 테스트 계약이 빈 SecretStr + fake provider 주입으로
+    # build_real_deps 조립 자체를 검증한다 — tests/api/test_deps.py NOTE 참조.)
+    openai_api_key = settings.openai_api_key.get_secret_value()
+    if not openai_api_key:
+        _LOGGER.error(
+            "RAG_OPENAI_API_KEY 가 비어 있다 — 운영 모드(RAG_USE_REAL_ADAPTERS=true)는 "
+            "라우터·히스토리·답변 생성기·검증기 4종 LLM provider 가 모두 OpenAI 를 호출하므로 "
+            "provider 생성/첫 호출 시점에 실패한다. 환경변수를 확인하라"
+        )
+
     # 실 어댑터 import는 lazy — embedding extra 미설치 환경에서도 build_poc_deps와
     # 본 모듈 import는 동작해야 한다. import 실패 시 호출자에게 ImportError 전파.
     from answer_generation_agent.config import AnswerGenerationConfig
@@ -204,11 +225,10 @@ def build_real_deps(settings: Settings | None = None) -> QueryGraphDeps:
     # chunk_lookup은 운영 모드에서 MongoDB `chunk_lookup` 컬렉션을 가리킨다 (db-schema §2.5).
     # 컬렉션이 비어 있어도 fetch가 None을 반환하므로 download_url=None으로 안전 fallback.
     chunk_lookup = MongoChunkTextLookup.from_settings(settings)
-    # OpenAI API key 는 settings 에서 1회 추출해 라우터·검증기·답변 생성기 3종에 명시
-    # 전달한다. CLAUDE.md 절대 규칙 "Secret 은 ``app/config.py`` 에서 환경 변수로
-    # 주입" 정합 — provider 가 ``os.environ.get("OPENAI_API_KEY")`` fallback 을 거치지
-    # 않도록 직접 주입한다 (feature12, 2026-05-19).
-    openai_api_key = settings.openai_api_key.get_secret_value()
+    # OpenAI API key 는 함수 상단에서 1회 추출·검증했다(fail-fast). CLAUDE.md 절대 규칙
+    # "Secret 은 ``app/config.py`` 에서 환경 변수로 주입" 정합 — provider 가
+    # ``os.environ.get("OPENAI_API_KEY")`` fallback 을 거치지 않도록 직접 주입한다
+    # (feature12, 2026-05-19).
     # 멀티턴 히스토리 분류기도 운영 모드는 OpenAI provider 를 사용한다(배포 전 점검,
     # 2026-06-10 — 라우터·생성기·검증기만 wiring 되고 히스토리는 Fake(항상 new_topic)로
     # 남아 멀티턴 맥락 통합이 운영에서 동작하지 않던 누락 보완). agent 의

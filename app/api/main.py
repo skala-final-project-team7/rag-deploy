@@ -34,6 +34,8 @@
     측정 결과 5건 모두 ``le=+Inf`` 에만 누적). ``Instrumentator.add(metrics
     .default(latency_highr_buckets=..., latency_lowr_buckets=...))`` 로 KPI
     임계 (1·2.5·5·10·30·60 초) 가 포함된 bucket 을 명시 등록한다.
+  - 2026-06-11, 배포 전 점검 fix — lifespan 기동 모드 명시 로깅. env 누락 시 PoC(전부
+    Fake) 부팅이 healthz 정상 + 샘플 기반 응답으로 무음이던 문제를 WARNING 으로 가시화.
 --------------------------------------------------
 [호환성]
   - Python 3.11.x, FastAPI 0.111+
@@ -41,6 +43,7 @@
 --------------------------------------------------
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -56,6 +59,8 @@ from app.pipeline.query_graph import (
     build_query_graph_for_streaming,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -66,8 +71,27 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         실 모델). 모델 다운로드(약 2.4 GB) + Qdrant 서버 접속 필요. 운영 진입점.
       - False(기본): ``build_poc_deps`` (:memory: Qdrant + Fake everything + samples
         자동 인덱싱). 외부 컨테이너·모델 없이 즉시 응답.
+
+    기동 모드를 명시 로그로 남긴다(배포 전 점검 fix, 2026-06-11) — env 누락으로 PoC
+    부팅이 되어도 healthz 정상 + 샘플 기반 응답이 나가 무음이던 문제의 가시화.
     """
     settings = get_settings()
+    if settings.use_real_adapters:
+        _LOGGER.info(
+            "RAG API 기동 — 운영(real) 모드: qdrant=%s:%s mongo_db=%s dense_model=%s "
+            "answer_model=%s",
+            settings.qdrant_host,
+            settings.qdrant_port,
+            settings.mongo_db,
+            settings.dense_embedding_model,
+            settings.llm_answer_model,
+        )
+    else:
+        _LOGGER.warning(
+            "RAG API 기동 — PoC 모드(:memory: Qdrant + Fake 어댑터 + samples 인덱싱): 답변이 "
+            "샘플 픽스처 기반 stub 으로 생성된다. 운영 배포라면 RAG_USE_REAL_ADAPTERS=true 가 "
+            "필요하다"
+        )
     deps: QueryGraphDeps = (
         build_real_deps(settings) if settings.use_real_adapters else build_poc_deps(settings)
     )
