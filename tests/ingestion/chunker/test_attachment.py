@@ -680,8 +680,9 @@ def test_samples_attachments_pdf_csv_through_adapter(tmp_path: Path) -> None:
             assert meta.source_type is SourceType.ATTACHMENT
             assert meta.attachment_id == attachment.attachment_id
             assert meta.page_id == page_obj.page_id
-            # 어댑터가 space_key로 합성한 ACL을 청크가 상속
-            assert meta.allowed_groups == page_obj.allowed_groups == ["space:CLOUD"]
+            # 어댑터가 합성한 ACL(공개 sentinel "*" — 2026-06-11 space key 레거시 제거)을
+            # 청크가 그대로 상속한다.
+            assert meta.allowed_groups == page_obj.allowed_groups == ["*"]
             assert meta.token_count > 0
         formats_seen.add(chunks[0].metadata.extracted_format)
 

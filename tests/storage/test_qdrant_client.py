@@ -290,9 +290,9 @@ def test_search_with_unmatched_acl_returns_empty(
 # --- 검색: per-user ACL (allowed_users) ---
 # db-schema §1.4 ACL 모델은 현재 대안 A(space_key 합성)로 운영되지만, 검색 측 필터
 # (build_acl_filter)는 이미 `allowed_users` 절을 emit 한다. 아래 테스트는 청크 payload 의
-# `allowed_users` 가 채워졌을 때(=대안 B/페이지 단위 권한) 검색 계층이 추가 코드 변경
-# 없이 사용자 단위 권한을 강제함을 :memory: Qdrant 로 증명한다. 합성 seam
-# (_synthesize_acl/synthesize_space_acl)이 allowed_users 를 채우기만 하면 per-user 권한이
+# `allowed_users` 가 채워졌을 때(=페이지 단위 권한 — 채택 모델) 검색 계층이 추가 코드 변경
+# 없이 사용자 단위 권한을 강제함을 :memory: Qdrant 로 증명한다. ingestion 의 ACL 산출
+# (restriction provider)이 allowed_users 를 채우기만 하면 per-user 권한이
 # 즉시 동작함을 보장하는 회귀 가드.
 
 
