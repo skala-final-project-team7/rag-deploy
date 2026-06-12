@@ -1,5 +1,8 @@
 """CrossEncoderRerankerImpl 어댑터 검증 (feature9-B-1).
 
+작성자 : 최태성
+담당 영역 : rag
+
 sentence-transformers 미설치 환경에서는 importorskip로 우회한다. 모델 다운로드(약
 130 MB)를 피하기 위해 단위 테스트에서는 ``CrossEncoder`` 를 모방하는 stub을 직접
 주입한다. 내부 ``_sigmoid`` 헬퍼의 수치 안정성도 함께 검증한다.

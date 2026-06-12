@@ -1,5 +1,8 @@
 """OpenAI Streaming generator + plain text prompt 빌더 검증 — (A) Hybrid streaming.
 
+작성자 : 최태성
+담당 영역 : rag
+
 stream_openai_answer: OpenAI Chat Completions streaming 으로 token chunk 를 yield
 하는 sync generator. 실제 OpenAI streaming 호출은 mock 으로 대체하고, prompt 합성
 정합·token 누적·빈 top_chunks 가드 분기를 검증한다.

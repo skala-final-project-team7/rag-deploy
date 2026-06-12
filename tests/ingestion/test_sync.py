@@ -1,5 +1,8 @@
 """삭제 동기화 (Reconciliation) 검증 — feature6 Phase 3.
 
+작성자 : 최태성
+담당 영역 : rag
+
 설계서 §3.7 Phase 1 흐름 정합:
 - source.list_active_ids() vs Qdrant scroll → ghost 차집합 → cascade 삭제
 

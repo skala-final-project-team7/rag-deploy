@@ -1,5 +1,8 @@
 """Chunk Text Lookup 어댑터 검증 — ChunkTextLookup ABC + Fake + Mongo.
 
+작성자 : 최태성
+담당 영역 : rag
+
 ABC 계약 + Fake in-memory 동작 + Mongo find_one/find/replace_one/bulk_write 응답 변환을
 검증한다. 실 MongoDB 없이 pymongo collection을 mock으로 대체해 외부 의존성 0.
 """

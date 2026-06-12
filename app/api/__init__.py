@@ -1,5 +1,8 @@
 """app.api — FastAPI 앱 및 라우트.
 
+작성자 : 최태성
+담당 영역 : rag
+
 RAG 파이프라인을 BFF에 노출하는 HTTP 계층. API 계약은 docs/api-spec.md.
 
 모듈:

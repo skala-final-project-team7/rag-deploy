@@ -1,5 +1,8 @@
 """Qdrant Multi-Pool 클라이언트 어댑터 검증 (feature5-B-2).
 
+작성자 : 최태성
+담당 영역 : rag
+
 `:memory:` Qdrant in-process 모드로 부트스트랩·Named Vector upsert·ACL 필터 검색·
 키 기반 삭제를 전부 실제로 수행한다 (외부 컨테이너 불필요). Fake 임베더로 결정론
 벡터를 생성하므로 모델 다운로드도 없다.

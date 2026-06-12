@@ -1,5 +1,8 @@
 """멀티턴 히스토리 관리자 어댑터 검증 (feature8 통합) — history-manager-agent ↔ RagState.
 
+작성자 : 최태성
+담당 영역 : rag
+
 manage_history: vendoring한 history-manager-agent 로직을 in-process로 호출해 히스토리를
 판단하고 RagState.history_decision에 채운다. agent LLM 호출은 FakeHistoryLLMProvider로 대체.
 """

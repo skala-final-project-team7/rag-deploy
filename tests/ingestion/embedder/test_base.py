@@ -1,5 +1,8 @@
 """Embedder 어댑터 base — Protocol + Fake 구현 검증 (feature5-B-1).
 
+작성자 : 최태성
+담당 영역 : rag
+
 FakeDenseEmbedder / FakeSparseEmbedder의 결정론·정규화·shape 계약 + SparseVector
 값 객체 불변성·길이 검증을 확인한다. 외부 의존성 0.
 """

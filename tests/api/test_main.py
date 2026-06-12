@@ -1,7 +1,9 @@
 """FastAPI 앱 entrypoint 회귀 — /metrics + /healthz 노출 검증.
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature12 (PDF 0518_RAG.pdf #4) — Prometheus instrumentator wiring
           회귀 보호. ``Instrumentator().instrument(app).expose(app,
           endpoint="/metrics", include_in_schema=False)`` 가 ``/metrics``

@@ -1,5 +1,8 @@
 """embedding_cache 어댑터 검증 (feature5-B-3).
 
+작성자 : 최태성
+담당 영역 : rag
+
 FakeEmbeddingCache 동작 + EmbeddingCacheEntry 불변성 + MongoEmbeddingCache의 pymongo
 호출 시그니처 검증(unittest.mock — 실 MongoDB 불필요).
 """

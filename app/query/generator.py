@@ -1,7 +1,9 @@
 """답변 생성기 — answer-generation-agent 통합 어댑터 노드 [Agent].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : Agent 담당자가 전달한 Answer Generation Agent(vendoring한
           ``answer_generation_agent`` 패키지)를 RAG Query 파이프라인의 답변 생성
           단계에 통합한다. 파일 기반 CLI workflow 대신 패키지의 조립 가능한 로직

@@ -1,5 +1,8 @@
 """LLM 커스텀 Prometheus 메트릭 회귀 — feature17a.
 
+작성자 : 최태성
+담당 영역 : rag
+
 app/metrics.py 의 Counter / Histogram 이 default registry 에 등록되어 inc /
 observe 시 누적되는지 + generator / verifier / router hook 이 실제로 카운터를
 증가시키는지 회귀 보호.

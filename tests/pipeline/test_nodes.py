@@ -1,5 +1,8 @@
 """Pipeline 노드 래퍼 테스트 — empty_retrieval / verify_pipeline / 분기 함수.
 
+작성자 : 최태성
+담당 영역 : rag
+
 본 테스트는 그래프 조립 단계에서 추가된 Pipeline 노드 래퍼들이 RagState 계약을
 올바르게 다루는지 검증한다. 외부 의존성 0 — Fake 검증 평가자만 주입한다.
 """

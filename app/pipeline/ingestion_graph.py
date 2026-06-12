@@ -1,7 +1,9 @@
 """Ingestion LangGraph 조립 + 그래프 호출 래퍼 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature6 Phase 4 — 표준 PageObject 를 받아 본문 + 첨부 청크를 적재까지 가는
           단일 페이지 Ingestion LangGraph. 설계서 §3.1 Big Picture 정합으로 analyze →
           chunk → embed_upsert 3 stage 를 한 위치에서 wiring 한다. 문서 분석기 [Agent]

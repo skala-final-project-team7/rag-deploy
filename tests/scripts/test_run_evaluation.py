@@ -1,5 +1,8 @@
 """scripts/run_evaluation.py — ROUGE-L / BERTScore helper 회귀 (feature17b).
 
+작성자 : 최태성
+담당 영역 : rag
+
 라이브러리 의존성 (rouge-score / bert-score) 은 monkeypatch 로 sentinel 응답으로
 대체해 evaluation extras 미설치 환경에서도 회귀 가능. helper 함수의 평균 산출
 로직과 옵션 미설치 시 ImportError 분기를 검증한다.

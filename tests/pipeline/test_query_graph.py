@@ -1,5 +1,8 @@
 """Query LangGraph end-to-end 통합 테스트 — :memory: Qdrant + Fake everything.
 
+작성자 : 최태성
+담당 영역 : rag
+
 본 테스트는 feature11 통합의 핵심 — Pipeline 노드(완료) + Agent stub 3종이 LangGraph
 StateGraph로 끝-끝 동작함을 외부 컨테이너·모델 없이 검증한다. api-spec.md의 표준 분기
 응답(RETRIEVAL_EMPTY / LOW_CONFIDENCE / VERIFICATION_BLOCKED)이 그래프 흐름과 포맷터

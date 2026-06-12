@@ -1,7 +1,9 @@
 """Evaluation Set 의 expected_chunk_ids 자동 backfill CLI [Pipeline 평가 도구].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature17b — ``samples/evaluation_set.json`` 의 각 항목이 ``expected
           _page_ids`` 만 라벨링하고 ``expected_chunk_ids`` 는 빈 배열인 상태에서,
           운영 Qdrant 에 적재된 chunk payload 를 scroll 해 expected_page_ids 와

@@ -1,5 +1,8 @@
 """응답 포맷터 검증 (feature11-Pipeline) — rag-pipeline-design.md §6 4.8, api-spec.md.
 
+작성자 : 최태성
+담당 영역 : rag
+
 format_response: 생성·검증을 거친 답변을 QueryResponse로 변환하고 "표준 분기 응답"
 규칙(저신뢰 분기 → feedback_enabled=false, NOT_SUPPORTED 비율 > 50% → 답변 차단)을 적용한다.
 """

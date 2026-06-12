@@ -1,3 +1,5 @@
+# 작성자 : 최태성
+# 담당 영역 : rag
 # LINA RAG Pipeline — Windows PowerShell 테스트 스크립트
 # scripts/test.sh의 Python 분기와 동등 (pytest).
 # 사용법:  .\scripts\test.ps1

@@ -1,7 +1,9 @@
 """쿼리 → Query LangGraph → SSE 페이로드 CLI 데모 (PoC, 무거운 모델 없음).
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature11 통합(Phase 1 + Phase 2)이 끝난 뒤, Pipeline 노드(완료) +
           Agent stub 3종으로 구성된 Query LangGraph 그래프가 끝-끝 동작함을 CLI
           데모로 시각화한다. FastAPI 진입점(app/api/main.py) 없이도 본 스크립트

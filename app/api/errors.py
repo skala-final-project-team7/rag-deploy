@@ -1,7 +1,9 @@
 """Error Response 정의 — api-spec.md Error Response 표 정합 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : api-spec.md Error Response 표의 표준 코드(``ErrorCode``)를 정의한다.
           본 앱의 오류 표면은 SSE ``error`` 이벤트(routes._error_event — ``errorCode``/
           ``message``)뿐이며 실사용 값은 ML_* 3종이다. `RETRIEVAL_EMPTY` /

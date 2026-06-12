@@ -1,4 +1,8 @@
-"""build_metadata — 청크 메타데이터 19종 부착 + 무결성 규칙 검증."""
+"""build_metadata — 청크 메타데이터 19종 부착 + 무결성 규칙 검증.
+
+작성자 : 최태성
+담당 영역 : rag
+"""
 
 from app.ingestion.chunker.base import ChunkDraft
 from app.ingestion.chunker.metadata import build_metadata

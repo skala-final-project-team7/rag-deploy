@@ -1,3 +1,5 @@
+# 작성자 : 최태성
+# 담당 영역 : rag
 # LINA RAG Pipeline — Windows PowerShell 포맷 스크립트
 # scripts/format.sh의 Python 분기와 동등.
 # 사용법:  .\scripts\format.ps1

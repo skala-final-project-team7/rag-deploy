@@ -1,5 +1,8 @@
 """답변 생성기 어댑터 검증 (Agent 통합 2/4) — answer-generation-agent ↔ RagState.
 
+작성자 : 최태성
+담당 영역 : rag
+
 manage_generator: vendoring 한 answer-generation-agent 로직(normalize → prompt →
 generate → citation_mapping → output build)을 in-process 로 호출해 답변 텍스트·
 sources·used_llm 을 채우고 RagState 에 담는다. agent LLM 호출은 FakeAnswerLLMProvider

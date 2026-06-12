@@ -1,7 +1,9 @@
 """답변 생성기 — OpenAI Chat Completions transport (non-streaming) [Storage].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : answer-generation-agent 의 ``OpenAIAnswerLLMProvider`` 는 transport
           callable (``Callable[[dict], dict]``) 주입을 요구한다. 본 모듈은
           ``openai>=1.30`` 클라이언트로 Chat Completions API 를 호출하고 결과를

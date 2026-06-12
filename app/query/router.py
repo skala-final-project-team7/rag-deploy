@@ -1,7 +1,9 @@
 """질의 라우터 — query-routing-agent 통합 어댑터 노드 [Agent].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : Agent 담당자가 전달한 Query Routing Agent(vendoring한 ``query_routing_agent``
           패키지)를 RAG Query 파이프라인에 통합한다. 파일 기반 CLI workflow 대신 패키지의
           조립 가능한 로직 함수(normalize → classify → rewrite → filter/weight)를

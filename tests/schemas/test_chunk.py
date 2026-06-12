@@ -1,4 +1,8 @@
-"""Chunk / ChunkMetadata 스키마 + make_chunk_id 멱등성 검증 (chunking-strategy.md §6)."""
+"""Chunk / ChunkMetadata 스키마 + make_chunk_id 멱등성 검증 (chunking-strategy.md §6).
+
+작성자 : 최태성
+담당 영역 : rag
+"""
 
 import pytest
 from pydantic import ValidationError

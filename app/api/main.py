@@ -1,7 +1,9 @@
 """FastAPI 앱 entrypoint — lifespan에서 Query 그래프 컴파일 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature11 통합 Phase 2 — FastAPI 애플리케이션의 진입점. lifespan에서
           ``build_poc_deps`` (또는 후속 ``build_real_deps``)를 호출해 Query 그래프
           의존성을 부트스트랩하고, ``build_query_graph`` 로 컴파일한 그래프를

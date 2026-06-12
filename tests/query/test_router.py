@@ -1,5 +1,8 @@
 """질의 라우터 어댑터 검증 (Agent 통합 1/4) — query-routing-agent ↔ RagState.
 
+작성자 : 최태성
+담당 영역 : rag
+
 manage_router: vendoring 한 query-routing-agent 로직(normalize → classify → rewrite →
 filter/weight)을 in-process 로 호출해 라우팅 의도·확장 쿼리·메타필터·Pool 가중치를
 채우고 RagState 에 담는다. agent LLM 호출은 FakeRoutingLLMProvider 로 대체.

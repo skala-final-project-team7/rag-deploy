@@ -1,5 +1,8 @@
 """청킹 2단계 하이브리드 규칙 — split_oversized / merge_undersized / apply_size_rules.
 
+작성자 : 최태성
+담당 영역 : rag
+
 chunking-strategy.md §3·§5: 1차 분할(body.py 담당) 결과에 2차 재분할(800토큰 초과 →
 100토큰 오버랩)과 하한선 병합(200토큰 미만)을 적용. 원자성 유지 유형은 제외.
 

@@ -1,7 +1,9 @@
 """Embedding Cache — MongoDB `embedding_cache` 클라이언트 어댑터 [Storage].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : LINA RAG 파이프라인의 재임베딩 멱등성을 강제하는 ``embedding_cache``
           저장소 어댑터. 동일 ``(chunk_id, version_number)`` 의 재호출에서 임베딩·
           upsert를 스킵하기 위한 경량 키-값 저장소다 (`docs/db-schema.md` §2.4,

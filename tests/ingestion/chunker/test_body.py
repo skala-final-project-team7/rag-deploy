@@ -1,5 +1,8 @@
 """본문 6유형 1차 분할기 검증 (chunking-strategy.md §3·§4).
 
+작성자 : 최태성
+담당 영역 : rag
+
 split_body는 body_html을 받아 clean_storage_format으로 정제 후 doc_type별로 분할한다.
 """
 

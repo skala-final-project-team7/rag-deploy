@@ -1,7 +1,9 @@
 """POST /ml/query — SSE 라우트 핸들러 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature11 통합 Phase 2 — Query 그래프(`app/pipeline/query_graph.py`)
           위에 얇은 HTTP 계층을 얹어 BFF가 호출하는 SSE 엔드포인트를 제공한다.
           BFF가 전달한 userId/groups 로 ACL 필터를 만들고 RagState 를 구성한 뒤

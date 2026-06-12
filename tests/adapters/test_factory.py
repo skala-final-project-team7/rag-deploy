@@ -1,4 +1,8 @@
-"""build_source_adapter — Settings.source_type 기반 어댑터 팩토리 검증 (P1-1)."""
+"""build_source_adapter — Settings.source_type 기반 어댑터 팩토리 검증 (P1-1).
+
+작성자 : 최태성
+담당 영역 : rag
+"""
 
 from pathlib import Path
 

@@ -1,3 +1,5 @@
+# 작성자 : 최태성
+# 담당 영역 : rag
 # LINA RAG Pipeline — Windows PowerShell 종합 검증 스크립트
 # scripts/verify.sh와 동등. format → lint → test 순으로 실행.
 # 사용법:  .\scripts\verify.ps1

@@ -1,7 +1,9 @@
 """Cross-Encoder 재순위화 — CrossEncoderRerankerImpl (sentence-transformers 래퍼) [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : sentence-transformers의 ``CrossEncoder`` 를 래핑해 CrossEncoderReranker
           인터페이스(`app/query/reranker/base.py`)를 구현한다. Sigmoid 활성화로 raw
           logit을 ``[0.0, 1.0]`` 점수로 변환해 ``select_reranked`` (feature9-A)의 임계값

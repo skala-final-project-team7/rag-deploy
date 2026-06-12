@@ -1,5 +1,8 @@
 """app.schemas — 계층 간 데이터 계약 [Pipeline].
 
+작성자 : 최태성
+담당 영역 : rag
+
 파이프라인 단계 간에 dict를 그대로 전달하지 않고 Pydantic 모델로 정의한다.
 주요 모델·열거형·헬퍼를 본 패키지에서 re-export 한다.
 

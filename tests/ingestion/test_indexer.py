@@ -1,5 +1,8 @@
 """Ingestion Indexer 검증 (feature5-B-3).
 
+작성자 : 최태성
+담당 영역 : rag
+
 청크 → 임베딩 → Multi-Pool upsert → embedding_cache 의 끝-끝 흐름을 Fake everything
 으로 검증한다. 외부 의존성 0 — 실 모델·실 Qdrant·실 MongoDB 모두 불필요.
 

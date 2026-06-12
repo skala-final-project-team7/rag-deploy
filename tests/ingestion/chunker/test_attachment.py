@@ -1,5 +1,8 @@
 """첨부 청킹 검증 (feature4-A: docx / xlsx, feature4-B: csv) — chunking-strategy.md §5.
 
+작성자 : 최태성
+담당 영역 : rag
+
 split_attachment는 첨부 파일을 attachment_type별 전략으로 1차 분할하고,
 chunk_attachment는 크기 규칙·메타데이터 부착까지 거쳐 Chunk 목록을 산출한다.
 docx/xlsx 픽스처는 samples/attachments/ 의 4건을 쓰고, csv는 tmp_path에 생성한다.

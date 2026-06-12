@@ -1,5 +1,8 @@
 """scripts/backfill_chunk_ids.py 회귀 — feature17b 인프라.
 
+작성자 : 최태성
+담당 영역 : rag
+
 Qdrant scroll 결과 mock 으로 expected_chunk_ids 자동 채움 + dry-run + 백업 생성.
 """
 

@@ -1,5 +1,8 @@
 """FastAPI 의존성 부트스트랩 검증 — build_real_deps + build_poc_deps.
 
+작성자 : 최태성
+담당 영역 : rag
+
 build_real_deps는 sentence-transformers / fastembed 모델 다운로드(약 2.4 GB) +
 Qdrant 서버 접속을 요구한다. 테스트는 monkeypatch로 실 어댑터 클래스 4종을
 가짜로 대체해 함수 로직(어댑터 wiring + Qdrant from_settings 호출 + samples

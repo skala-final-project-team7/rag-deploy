@@ -1,5 +1,8 @@
 """POST /ml/query — httpx ASGITransport 통합 테스트.
 
+작성자 : 최태성
+담당 영역 : rag
+
 본 테스트는 FastAPI 라우트가 (1) SSE 이벤트 5종 시퀀스(token/sources/verification/meta/done)를
 정확히 송신하고, (2) 표준 분기 응답 / 예외 → SSE error 이벤트 매핑을 api-spec.md(BE 통합
 스펙 /ml/query) 정합으로 처리하는지를 in-process httpx 클라이언트로 검증한다. 외부

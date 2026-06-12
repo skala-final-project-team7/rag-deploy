@@ -1,7 +1,9 @@
 """Evaluation Set 실행 + 결과 측정 CLI [Pipeline 평가 도구].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature17a — 설계서 §6.2 Evaluation Set 50건을 그래프에 통과시키고
           (1) Precision@k (정답 page_id 기준), (2) 의도 분류 정확도, (3) 평균
           latency / NOT_SUPPORTED 비율 / Top-1 Cross-Encoder 점수 분포를 산출

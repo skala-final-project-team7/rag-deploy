@@ -1,5 +1,8 @@
 """Dual Embedding 입력·멱등성 로직 검증 (feature5-A) — db-schema.md §1, app/CLAUDE.md §4.
 
+작성자 : 최태성
+담당 영역 : rag
+
 pool_embedding_texts: Pool별 임베딩 입력 텍스트 구성.
 should_skip_embedding: embedding_cache 기반 재임베딩 멱등성 판정.
 """

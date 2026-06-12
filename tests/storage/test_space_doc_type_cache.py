@@ -1,5 +1,8 @@
 """space_doc_type_cache 어댑터 단위 테스트 — FakeSpaceDocTypeCache get/set/upsert.
 
+작성자 : 최태성
+담당 영역 : rag
+
 MySQL 실구현(MySQLSpaceDocTypeCache)은 sqlalchemy/DB 의존이라 본 단위 테스트는 외부
 의존성 0 의 Fake 만 검증한다(문서 분석기 [Agent] 통합 4/4 의존 자산, featureI-4b 백포트).
 """

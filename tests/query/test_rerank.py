@@ -1,5 +1,8 @@
 """Cross-Encoder 재순위화 선정 로직 검증 (feature9-A) — rag-pipeline-design.md §6 4.5, §8.
 
+작성자 : 최태성
+담당 영역 : rag
+
 select_reranked: Top-5 선정, 5위 < NARROW(0.65) 시 Top-3 축소, 최고 < LOW(0.55) 시
 저신뢰 분기. 임계값은 feature17c-2(2026-05-20) temperature scaling(T=4) 도입으로
 NARROW 0.30→0.65 / LOW 0.20→0.55 로 재조정됨.

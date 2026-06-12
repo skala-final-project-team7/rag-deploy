@@ -1,7 +1,9 @@
 """Cross-Encoder 재순위화 노드 — candidates → top_chunks + sources [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : Query 파이프라인의 재순위화 단계 LangGraph 노드. 9-B-2가 채운 RagState.
           candidates(Top-20)에 대해 9-B-1 Reranker로 (query, passage) 관련도 점수를
           산출하고, 9-A `select_reranked` 결정론 로직으로 Top-K(5 또는 3)를 선정해

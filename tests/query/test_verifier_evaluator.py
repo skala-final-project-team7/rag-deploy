@@ -1,5 +1,8 @@
 """답변 검증 2단계 LLM 평가자 어댑터 검증 (Agent 통합 3/4).
 
+작성자 : 최태성
+담당 영역 : rag
+
 manage_verifier_evaluator: vendoring 한 answer-verification-agent 의 evaluator 모듈을
 in-process 로 호출해 의심 문장을 SUPPORTED / NOT_SUPPORTED 로 판정한다. 1단계 규칙
 매칭(`verify_answer_rules`, Pipeline)이 본 어댑터 호출 전에 수행되어 SentenceCheck

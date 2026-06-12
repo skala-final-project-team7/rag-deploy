@@ -1,3 +1,5 @@
+# 작성자 : 최태성
+# 담당 영역 : rag
 [project]
 name = "lina-rag-pipeline"
 version = "0.1.0"

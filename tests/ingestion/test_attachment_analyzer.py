@@ -1,5 +1,8 @@
 """첨부 파일 분석기 검증 (feature6 Phase 1).
 
+작성자 : 최태성
+담당 영역 : rag
+
 설계서 §3.3.B 정합 회귀:
 - ① 유형 판별: mime/확장자 → AttachmentType ∈ {pdf, docx, xlsx, csv}.
   미지원 → UNSUPPORTED_ATTACH_TYPE

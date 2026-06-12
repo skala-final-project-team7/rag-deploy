@@ -1,5 +1,8 @@
 """JsonFixtureSourceAdapter — 매핑 단위 테스트 + samples 전체 로드 통합 테스트.
 
+작성자 : 최태성
+담당 영역 : rag
+
 데이터 계층 검증: samples/*.json(Atlassian 응답 포맷) → PageObject 변환이
 스키마(feature1)와 정합하는지, 92페이지 전체가 오류 없이 로드되는지 확인한다.
 """

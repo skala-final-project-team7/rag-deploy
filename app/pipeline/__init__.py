@@ -1,5 +1,8 @@
 """app.pipeline — LangGraph 그래프 조립.
 
+작성자 : 최태성
+담당 영역 : rag
+
 app.ingestion / app.query 의 단계별 노드를 LangGraph StateGraph로 연결한다.
 각 노드는 단일 책임을 갖고, 노드 입출력 상태는 app.schemas 의 IngestionState / RagState로 통일한다.
 

@@ -1,5 +1,8 @@
 """BM25SparseEmbedder 어댑터 검증 (feature5-B-1).
 
+작성자 : 최태성
+담당 영역 : rag
+
 fastembed 미설치 환경에서는 importorskip로 우회한다. fastembed 모델 다운로드를
 피하기 위해 단위 테스트에서는 ``SparseTextEmbedding`` 을 모방하는 stub을 직접
 주입한다.

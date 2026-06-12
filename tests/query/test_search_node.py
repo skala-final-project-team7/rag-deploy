@@ -1,5 +1,8 @@
 """Hybrid Search 노드 검증 (feature9-B-2).
 
+작성자 : 최태성
+담당 영역 : rag
+
 `:memory:` Qdrant + FakeDenseEmbedder + FakeSparseEmbedder 조합으로 hybrid_search 노드의
 끝-끝 흐름을 통합 검증한다. ACL 강제 / multi-query / pool_weights 분기 /
 metadata_filters / Chunk 재구성 / 0건 처리까지 모두 외부 컨테이너·모델 없이 검증.

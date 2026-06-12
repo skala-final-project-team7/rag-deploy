@@ -1,5 +1,8 @@
 """ingestion_jobs 어댑터 검증 (feature6 Phase 2).
 
+작성자 : 최태성
+담당 영역 : rag
+
 db-schema §2.3 정합 — 7필드 (page_id / attachment_id / stage / status / started_at /
 finished_at / error) 적재 어댑터. ABC + Fake(in-memory) + Mongo(insert_one/insert_many)
 3종을 chunk_lookup Phase 1 패턴으로 검증. 실 MongoDB 없이 pymongo collection을 mock

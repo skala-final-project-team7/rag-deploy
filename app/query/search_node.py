@@ -1,7 +1,9 @@
 """Multi-Pool Hybrid Search 노드 — query 임베딩 + 3 Pool dense+sparse + RRF [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : Query 파이프라인의 검색 단계 LangGraph 노드. RagState의 query (+ 선택적
           rewritten_queries)를 받아 dense·sparse 임베딩(5-B-1) → 3 Pool ACL 필터 검색
           (5-B-2) → 9-A 결정론 로직(RRF + Pool 가중 합산 + Top-N 선정) → Chunk 재구성

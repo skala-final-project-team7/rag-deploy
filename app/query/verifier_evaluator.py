@@ -1,7 +1,9 @@
 """답변 검증 2단계 LLM 평가자 — answer-verification-agent 통합 어댑터 [Agent].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : Agent 담당자가 전달한 Answer Verification Agent(vendoring한
           ``answer_verification_agent`` 패키지)의 evaluator 모듈을 RAG Query
           파이프라인의 답변 검증 2단계에 통합한다. 본 저장소는 검증 1단계

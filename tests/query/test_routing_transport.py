@@ -1,5 +1,8 @@
 """라우터 OpenAI transport 회귀 — feature17a 후속 (라우터 의도 분류 prompt 보강).
 
+작성자 : 최태성
+담당 영역 : rag
+
 build_openai_routing_transport: OpenAIRoutingLLMProvider 에 주입되는 transport
 callable. system prompt 에 4종 의도 정의·예시·구분 기준 + 출력 schema 강제 메시지
 가 포함되고, response_format=json_object 가 적용되는지 회귀 보호.

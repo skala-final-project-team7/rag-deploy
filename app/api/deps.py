@@ -1,7 +1,9 @@
 """FastAPI 의존성 부트스트랩 — Query 그래프 의존성 구성 헬퍼 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : FastAPI 앱이 시작할 때 한 번 호출되어 Query 그래프 의존성
           (``QueryGraphDeps``)을 부트스트랩한다. PoC 기본(``build_poc_deps``)은
           :memory: Qdrant + Fake embedder/reranker + samples 자동 인덱싱으로 외부

@@ -1,7 +1,9 @@
 """Query LangGraph 그래프 조립 + 그래프 호출 래퍼 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature11 통합 — Query 파이프라인의 Pipeline 노드(완료)와 Agent stub(`app/
           pipeline/stubs.py`)을 LangGraph StateGraph로 잇는다. ACL Pre-filtering →
           멀티턴 히스토리 → 라우터 → Multi-Pool Hybrid Search → (검색 0건 분기) →

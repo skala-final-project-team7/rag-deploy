@@ -1,5 +1,8 @@
 """scripts/extract_golden_set.py — 3 조건 AND 필터 회귀 (feature17b).
 
+작성자 : 최태성
+담당 영역 : rag
+
 설계서 §6.3 의 Golden Set 채택 기준 3 조건을 결정론적으로 검증.
 """
 

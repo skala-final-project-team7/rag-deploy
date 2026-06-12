@@ -1,7 +1,9 @@
 """Multi-Pool Hybrid Search 핵심 로직 — RRF 융합 / Pool 가중 합산 / Top-N 선정.
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : LINA RAG 파이프라인 Query 단계의 Multi-Pool Hybrid Search 결정론적 로직을
           제공한다. Pool 내부에서 dense·sparse 순위를 RRF로 융합하고, 3개 Pool을
           가중 합산해 Top-N 후보를 선정한다 (rag-pipeline-design.md §6 4.5).

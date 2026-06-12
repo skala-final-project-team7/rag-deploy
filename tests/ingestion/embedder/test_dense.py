@@ -1,5 +1,8 @@
 """E5DenseEmbedder 어댑터 검증 (feature5-B-1).
 
+작성자 : 최태성
+담당 영역 : rag
+
 sentence-transformers 미설치 환경에서는 importorskip로 우회한다. 무거운 모델
 다운로드(약 2.24 GB)를 피하기 위해 단위 테스트에서는 ``SentenceTransformer`` 를
 모방하는 stub을 ``__new__`` + 직접 속성 주입으로 끼워 넣는다.

@@ -1,5 +1,8 @@
 """LINA RAG Pipeline 애플리케이션 패키지.
 
+작성자 : 최태성
+담당 영역 : rag
+
 척척학사(LINA) Confluence 기반 RAG 챗봇 서비스의 RAG 파이프라인.
 설계 기준: docs/rag-pipeline-design.md, docs/chunking-strategy.md,
 docs/db-schema.md, docs/api-spec.md.

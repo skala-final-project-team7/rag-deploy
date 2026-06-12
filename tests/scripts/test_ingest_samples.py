@@ -1,5 +1,8 @@
 """scripts/ingest_samples.py 회귀 — feature17c-4 첨부 청크 인덱싱 wiring.
 
+작성자 : 최태성
+담당 영역 : rag
+
 collect_chunks 가 본문(chunk_page) + 첨부(chunk_attachment) 청크를 함께 수집하고,
 미지원 유형(PDF/CSV)·파싱 실패는 적재를 중단하지 않고 안전하게 skip 하는지 검증한다.
 

@@ -1,7 +1,9 @@
 """Golden Set 자동 추출 CLI [Pipeline 평가 도구].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature17b — 설계서 §6.3 의 Golden Set 채택 3 조건 AND 필터를
           ``scripts/run_evaluation.py`` 의 결과 JSON 에 적용해 Golden Set 을
           자동 추출한다. Golden Set 은 후속 회귀 평가 (feature17c 튜닝 vs

@@ -1,5 +1,8 @@
 """OpenAI Chat Completions transport callable 검증 — (B) 운영 OpenAI HTTP transport.
 
+작성자 : 최태성
+담당 영역 : rag
+
 build_openai_chat_transport: agent OpenAIAnswerLLMProvider 의 transport 자리에 주입
 되는 callable. 실제 OpenAI API 호출은 mock 으로 대체하고, payload 정규화·JSON 파싱·
 에러 흡수 분기를 검증한다.

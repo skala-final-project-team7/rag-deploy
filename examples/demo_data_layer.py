@@ -1,5 +1,8 @@
 """RAG 파이프라인 로컬 실행 데모 — 팀원 시연용.
 
+작성자 : 최태성
+담당 영역 : rag
+
 samples/*.json(Atlassian 응답 포맷)을 JsonFixtureSourceAdapter로 읽어 표준 PageObject로
 변환(데이터 계층)하고, Adaptive Chunker로 청크 분할(청킹 계층)하는 것을 콘솔에 요약 출력한다.
 현재까지 구현된 feature1(스키마)·feature2 일부(어댑터)·feature3(본문 청킹)을 실제 데이터로 보여준다.

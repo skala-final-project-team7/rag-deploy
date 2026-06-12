@@ -1,5 +1,8 @@
 """Cross-Encoder 재순위화 노드 검증 (feature9-B-3).
 
+작성자 : 최태성
+담당 영역 : rag
+
 FakeCrossEncoderReranker + 임의의 RerankerStub로 candidates → top_chunks + sources의
 끝-끝 흐름을 통합 검증한다. 외부 의존성 0.
 

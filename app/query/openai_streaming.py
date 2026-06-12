@@ -1,7 +1,9 @@
 """답변 생성기 — OpenAI Chat Completions streaming (plain text + [#N]) [Storage].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : 설계서 §4.6.4 SSE 토큰 스트리밍 정합 — agent 의 JSON contract
           (``{answer, sentences, unsupported_gaps}``) 와 token streaming 사이
           의 충돌을 해소하기 위해 hybrid 방식 (Plan v2 §4.A) 의 streaming 경로

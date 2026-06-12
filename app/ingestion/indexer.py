@@ -1,7 +1,9 @@
 """Ingestion Indexer — 청크 → 임베딩 → Multi-Pool upsert 오케스트레이터 [Pipeline].
 
---------------------------------------------------
 작성자 : 최태성
+담당 영역 : rag
+
+--------------------------------------------------
 작성목적 : feature5-A(payload·멱등성 순수 로직) · 5-B-1(Embedder 어댑터) · 5-B-2(Qdrant
           Multi-Pool 클라이언트) · 5-B-3(EmbeddingCache) 부품을 한 흐름으로 잇는다.
           청크 컬렉션을 받아 (chunk_id, version_number) 기반 멱등성 필터를 거쳐, Pool별

@@ -1,5 +1,8 @@
 """Cross-Encoder Reranker base — ABC + Fake 구현 검증 (feature9-B-1).
 
+작성자 : 최태성
+담당 영역 : rag
+
 FakeCrossEncoderReranker의 결정론·점수 범위·shape 계약을 확인한다. 외부 의존성 0.
 """
 

@@ -1,5 +1,8 @@
 """Multi-Pool Hybrid Search 핵심 로직 검증 (feature9-A) — rag-pipeline-design.md §6 4.5.
 
+작성자 : 최태성
+담당 영역 : rag
+
 reciprocal_rank_fusion / merge_pools / select_top_candidates / fuse_and_rank 순수 함수.
 """
 

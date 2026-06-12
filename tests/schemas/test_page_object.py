@@ -1,4 +1,8 @@
-"""PageObject / Attachment 스키마 검증 (설계서 §7.1)."""
+"""PageObject / Attachment 스키마 검증 (설계서 §7.1).
+
+작성자 : 최태성
+담당 영역 : rag
+"""
 
 import pytest
 from pydantic import ValidationError

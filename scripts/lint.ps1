@@ -1,3 +1,5 @@
+# 작성자 : 최태성
+# 담당 영역 : rag
 # LINA RAG Pipeline — Windows PowerShell 린트 스크립트
 # scripts/lint.sh의 Python 분기와 동등 (ruff check + mypy app).
 # 사용법:  .\scripts\lint.ps1

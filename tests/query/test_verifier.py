@@ -1,5 +1,8 @@
 """답변 검증 1단계 규칙 매칭 검증 (feature10-Pipeline) — rag-pipeline-design.md §6 4.7.
 
+작성자 : 최태성
+담당 영역 : rag
+
 verify_answer_rules: 답변을 문장 단위로 분해해 검증 토큰(수치·구조적 식별자)이 인용
 청크 텍스트에 나타나는지 대조하고, 미검증 토큰이 있는 문장을 suspicious로 FLAG한다.
 """

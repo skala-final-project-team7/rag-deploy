@@ -1,5 +1,8 @@
 """대화 제목 생성기(app/query/titler.py) 단위 테스트.
 
+작성자 : 최태성
+담당 영역 : rag
+
 LLM 호출(`generate_conversation_title`)은 외부 의존성이므로 본 단위 테스트는 네트워크
 없이 동작하는 순수 로직(`fallback_title` 및 내부 `_clean_title` 정리 규칙)만 검증한다.
 운영 경로의 LLM 호출/실패 fallback 통합은 tests/api/test_query_route.py 에서 라우트

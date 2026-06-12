@@ -1,5 +1,8 @@
 """clean_storage_format — Confluence Storage Format(HTML) 전처리 검증.
 
+작성자 : 최태성
+담당 영역 : rag
+
 입력 HTML 구조는 samples/*.json 실제 본문 패턴 기준
 (h2/h3/h4, p, ul/ol/li, table, inline <code>, code 매크로, ac:task-list).
 """
