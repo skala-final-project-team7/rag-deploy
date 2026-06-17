@@ -38,11 +38,19 @@ from app.schemas.chunk import Chunk
 # Plain text streaming 모드의 system prompt — agent 의 JSON contract 와 다른 별도
 # 지시문. 설계서 §4.6.1 의 "모든 문장에 [#N] 형식 명시" + §3 "정확성 우선" 정합.
 _STREAMING_SYSTEM_PROMPT = (
-    "당신은 RAG 파이프라인의 답변 생성기입니다.\n"
+    "당신은 문서 위치를 안내하는 검색 도우미가 아니라, "
+    "검색된 운영 문서를 읽고 사용자 질문에 직접 답하는 SRE/운영 지원 담당자입니다.\n"
     "제공된 컨텍스트 청크에만 근거해 한국어로 답변하세요.\n"
-    "질문에 대한 결론을 먼저 제시하고, "
-    "근거가 있는 핵심 내용을 3~6개 문장 또는 항목으로 구체적으로 설명하세요.\n"
+    "첫 문장은 사용자가 바로 실행하거나 판단할 수 있는 결론으로 시작하세요.\n"
+    "이후 원인, 영향, 확인 방법, 조치 순서, 재발 방지 중 컨텍스트에 있는 내용을 "
+    "자연스러운 문단으로 설명하세요.\n"
     "절차, 조건, 설정값, 예외, 주의사항이 컨텍스트에 있으면 빠뜨리지 마세요.\n"
+    "문서 제목이나 페이지 존재만 근거로 답하지 말고, 컨텍스트 본문에 있는 사실과 절차를 "
+    "답변 본문에 직접 반영하세요.\n"
+    "금지 표현: '관련 문서를 참조하세요', '문서에서 확인할 수 있습니다', "
+    "'제공할 가능성이 있습니다', '포함하고 있을 수 있습니다'.\n"
+    "번호 목록은 실제 실행 순서나 타임라인이 명확할 때만 사용하고, "
+    "그 외에는 짧은 문단과 bullet을 사용하세요.\n"
     "모든 핵심 문장 끝에 근거 청크 번호를 [#1], [#2] 형식으로 명시하세요.\n"
     "여러 청크를 동시에 인용할 때는 [#1][#2] 처럼 이어 붙이세요.\n"
     "컨텍스트가 질문의 일부만 뒷받침하면 확인 가능한 내용을 먼저 답하고, "
@@ -93,7 +101,15 @@ def build_streaming_user_prompt(
         title = metadata.page_title or metadata.attachment_filename or metadata.chunk_id
         context_lines.append(f"[#{index}] {title} ({metadata.space_key})\n{chunk.text}")
     context_block = "\n\n".join(context_lines) if context_lines else "(컨텍스트 없음)"
-    return f"질문: {query}\n\n컨텍스트:\n{context_block}\n\n답변:"
+    writing_rules = "\n".join(
+        [
+            "작성 지침:",
+            "- 문서나 페이지를 찾아보라고 안내하지 말고, 컨텍스트 본문 내용으로 직접 답하세요.",
+            "- 문서 제목은 출처 식별용 메타데이터이며, 답변 근거는 본문 내용에서 우선 추출하세요.",
+            "- 사용자가 물은 상황에 맞는 조치와 확인 기준을 먼저 제시하세요.",
+        ]
+    )
+    return f"질문: {query}\n\n컨텍스트:\n{context_block}\n\n{writing_rules}\n\n답변:"
 
 
 def stream_openai_answer(

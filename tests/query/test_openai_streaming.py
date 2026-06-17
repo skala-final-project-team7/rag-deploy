@@ -87,6 +87,8 @@ def test_user_prompt_includes_chunk_text() -> None:
     chunks = [_make_chunk(text="alpha bravo charlie")]
     prompt = build_streaming_user_prompt(query="질문", top_chunks=chunks)
     assert "alpha bravo charlie" in prompt
+    assert "문서 제목은 출처 식별용 메타데이터" in prompt
+    assert "컨텍스트 본문 내용으로 직접 답하세요" in prompt
 
 
 # --- streaming generator ---
@@ -239,7 +241,7 @@ def test_streaming_passes_model_and_temperature(
 def test_streaming_system_prompt_enforces_marker_rule(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # System prompt 가 [#N] 마커 규칙·plain text 출력·답변 상세화 정책을 강제.
+    # System prompt 가 [#N] 마커 규칙·plain text 출력·직접 답변 정책을 강제.
     client = _FakeStreamingClient(tokens=["ok"])
     _install_fake_openai_for_streaming(monkeypatch, client)
 
@@ -258,9 +260,14 @@ def test_streaming_system_prompt_enforces_marker_rule(
     assert system_message["role"] == "system"
     assert "[#1]" in system_message["content"] or "[#" in system_message["content"]
     assert "plain text" in system_message["content"].lower()
-    assert "3~6개" in system_message["content"]
-    assert "확인 가능한 내용" in system_message["content"]
-    assert "답변 전체" in system_message["content"]
+    assert "사용자 질문에 직접 답하는 SRE/운영 지원 담당자" in system_message["content"]
+    assert "컨텍스트 본문에 있는 사실과 절차를 답변 본문에 직접 반영" in (
+        system_message["content"]
+    )
+    assert "문서에서 확인할 수 있습니다" in system_message["content"]
+    assert "번호 목록은 실제 실행 순서나 타임라인이 명확할 때만 사용" in (
+        system_message["content"]
+    )
 
 
 # --- 2026-06-10 코드 리뷰(A7): try/finally 자원 정리 ---

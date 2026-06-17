@@ -70,6 +70,30 @@ def test_low_confidence_disables_feedback() -> None:
     assert response.answer == "참고할 만한 답변"
 
 
+def test_no_answer_response_clears_irrelevant_sources_and_verification() -> None:
+    sources = [_source(88), _source(82)]
+    verification = [_verification(VerificationStatus.PASS)]
+    response = format_response(
+        (
+            "제공된 컨텍스트에는 '서현이'라는 키워드와 관련된 정보가 포함되어 있지 않습니다. "
+            "따라서 추가적인 정보가 필요합니다. [#1]"
+        ),
+        sources,
+        verification,
+        Intent.OPERATION_GUIDE,
+        LlmModel.GPT_4O,
+        3000,
+    )
+
+    assert response.answer == (
+        "제공된 컨텍스트에는 '서현이'라는 키워드와 관련된 정보가 포함되어 있지 않습니다. "
+        "따라서 추가적인 정보가 필요합니다."
+    )
+    assert response.sources == []
+    assert response.verification == []
+    assert response.feedback_enabled is False
+
+
 def test_low_confidence_boundary_score_55() -> None:
     # 최고 점수가 정확히 55이면 저신뢰가 아니다 (55 미만만 저신뢰)
     response = format_response(

@@ -38,6 +38,14 @@ BLOCKED_ANSWER_MESSAGE = (
     "아래 참고 출처를 직접 확인해 주세요."
 )
 
+_NO_ANSWER_MARKERS = (
+    "관련된 정보가 포함되어 있지 않습니다",
+    "관련 정보가 포함되어 있지 않습니다",
+    "관련된 정보를 찾을 수 없습니다",
+    "관련 정보를 찾을 수 없습니다",
+    "참고할 수 있는 문서를 찾지 못했습니다",
+)
+
 
 def _is_low_confidence(sources: list[Source]) -> bool:
     """Cross-Encoder 최고 점수가 임계 미만이거나 출처가 없으면 저신뢰 분기."""
@@ -56,6 +64,13 @@ def _not_supported_ratio(verification: list[Verification]) -> float:
     return not_supported / len(verification)
 
 
+def _is_no_answer_response(answer: str) -> bool:
+    """True when the generated answer explicitly says the requested info is absent."""
+
+    clean_answer = strip_citation_markers(answer)
+    return any(marker in clean_answer for marker in _NO_ANSWER_MARKERS)
+
+
 def format_response(
     answer: str,
     sources: list[Source],
@@ -71,8 +86,10 @@ def format_response(
       BLOCKED_ANSWER_MESSAGE로 대체한다 (feedback_enabled=False). 차단이 저신뢰보다 우선한다.
     - Cross-Encoder 최고 점수가 LOW_CONFIDENCE_SCORE 미만이면 저신뢰 분기로 보아
       feedback_enabled=False로 둔다 (답변 자체는 '참고용'으로 유지).
+    - 답변이 "관련 정보를 찾을 수 없음" 계열이면 출처와 검증 결과를 비워 UI가
+      무관한 Top-K 문서를 근거처럼 보여주지 않게 한다.
     - 그 외에는 답변을 그대로 두고 feedback_enabled=True.
-    출처·검증 결과는 어느 분기에서도 투명성을 위해 그대로 응답에 담는다.
+    출처·검증 결과는 차단/정상 분기에서는 투명성을 위해 그대로 응답에 담는다.
 
     Args:
         answer: 생성기가 만든 답변 텍스트 (`[#n]` 인용 마커 포함 가능).
@@ -86,14 +103,17 @@ def format_response(
         UI 렌더링용 QueryResponse.
     """
     is_blocked = _not_supported_ratio(verification) > VERIFICATION_BLOCK_RATIO
-    is_low_confidence = is_blocked or _is_low_confidence(sources)
+    is_no_answer = _is_no_answer_response(answer)
+    final_sources = [] if is_no_answer else sources
+    final_verification = [] if is_no_answer else verification
+    is_low_confidence = is_blocked or is_no_answer or _is_low_confidence(final_sources)
     final_answer = BLOCKED_ANSWER_MESSAGE if is_blocked else strip_citation_markers(answer)
     return QueryResponse(
         answer=final_answer,
         intent=intent,
         used_llm=used_llm,
         latency_ms=latency_ms,
-        sources=sources,
-        verification=verification,
+        sources=final_sources,
+        verification=final_verification,
         feedback_enabled=not is_low_confidence,
     )
