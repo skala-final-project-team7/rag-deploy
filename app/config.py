@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # --- Qdrant Multi-Pool Vector Store ---
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
+    qdrant_api_key: SecretStr = SecretStr("")
     qdrant_title_pool: str = "title_pool"
     qdrant_content_pool: str = "content_pool"
     qdrant_label_pool: str = "label_pool"

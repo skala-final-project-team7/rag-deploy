@@ -130,9 +130,9 @@ class QdrantPoolStore:
     호출 두 번을 노출하는 데서 멈춘다.
 
     Args:
-        client: 사전 구성된 qdrant-client 인스턴스. 운영은 ``QdrantClient(host, port)`` 를
-            ``from_settings`` 로 생성하고, 테스트·시연은 ``QdrantClient(":memory:")`` 를
-            ``in_memory`` 로 생성한다.
+        client: 사전 구성된 qdrant-client 인스턴스. 운영은 ``QdrantClient(host, port,
+            api_key)`` 를 ``from_settings`` 로 생성하고, 테스트·시연은
+            ``QdrantClient(":memory:")`` 를 ``in_memory`` 로 생성한다.
         settings: 환경 설정. 컬렉션 이름을 읽는다.
         dense_dimension: dense vector 차원. e5-large = 1024. 임베더의 ``dimension``
             속성을 그대로 주입한다. Collection 생성 시 ``VectorParams.size`` 로 박힌다.
@@ -151,8 +151,13 @@ class QdrantPoolStore:
 
     @classmethod
     def from_settings(cls, settings: Settings, *, dense_dimension: int = 1024) -> "QdrantPoolStore":
-        """환경 설정에서 host/port로 클라이언트를 만들어 인스턴스화한다."""
-        client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+        """환경 설정에서 host/port/api_key로 클라이언트를 만들어 인스턴스화한다."""
+        api_key = settings.qdrant_api_key.get_secret_value() or None
+        client = QdrantClient(
+            host=settings.qdrant_host,
+            port=settings.qdrant_port,
+            api_key=api_key,
+        )
         return cls(client=client, settings=settings, dense_dimension=dense_dimension)
 
     @classmethod

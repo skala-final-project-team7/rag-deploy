@@ -151,6 +151,28 @@ def test_pool_name_to_collection_rejects_unknown() -> None:
         _pool_name_to_collection(_settings(), "phantom_pool")
 
 
+def test_from_settings_passes_qdrant_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeQdrantClient:
+        def __init__(self, *, host: str, port: int, api_key: str | None) -> None:
+            captured["host"] = host
+            captured["port"] = port
+            captured["api_key"] = api_key
+
+    monkeypatch.setattr("app.storage.qdrant_client.QdrantClient", FakeQdrantClient)
+
+    settings = Settings(_env_file=None, qdrant_api_key="qdrant-admin-api-key")  # type: ignore[call-arg]
+    store = QdrantPoolStore.from_settings(settings, dense_dimension=8)
+
+    assert store._client.__class__ is FakeQdrantClient
+    assert captured == {
+        "host": settings.qdrant_host,
+        "port": settings.qdrant_port,
+        "api_key": "qdrant-admin-api-key",
+    }
+
+
 # --- SearchHit ---
 
 

@@ -55,6 +55,15 @@ def test_openai_api_key_is_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.openai_api_key.get_secret_value() == "sk-secret-value"
 
 
+def test_qdrant_api_key_is_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAG_QDRANT_API_KEY", "qdrant-secret-value")
+    settings = Settings(_env_file=None)  # type: ignore[arg-type]
+
+    assert "qdrant-secret-value" not in repr(settings)
+    assert "qdrant-secret-value" not in str(settings)
+    assert settings.qdrant_api_key.get_secret_value() == "qdrant-secret-value"
+
+
 def test_get_settings_returns_settings() -> None:
     assert isinstance(get_settings(), Settings)
 
