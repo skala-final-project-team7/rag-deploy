@@ -21,6 +21,7 @@
 --------------------------------------------------
 """
 
+from app.query.citation_display import strip_citation_markers
 from app.schemas.enums import Intent, LlmModel, VerificationStatus
 from app.schemas.response import QueryResponse, Source, Verification
 
@@ -86,7 +87,7 @@ def format_response(
     """
     is_blocked = _not_supported_ratio(verification) > VERIFICATION_BLOCK_RATIO
     is_low_confidence = is_blocked or _is_low_confidence(sources)
-    final_answer = BLOCKED_ANSWER_MESSAGE if is_blocked else answer
+    final_answer = BLOCKED_ANSWER_MESSAGE if is_blocked else strip_citation_markers(answer)
     return QueryResponse(
         answer=final_answer,
         intent=intent,

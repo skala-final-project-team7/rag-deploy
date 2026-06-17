@@ -239,7 +239,7 @@ def test_streaming_passes_model_and_temperature(
 def test_streaming_system_prompt_enforces_marker_rule(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # System prompt 가 [#N] 마커 규칙·plain text 출력·컨텍스트 외 단정 금지를 강제.
+    # System prompt 가 [#N] 마커 규칙·plain text 출력·답변 상세화 정책을 강제.
     client = _FakeStreamingClient(tokens=["ok"])
     _install_fake_openai_for_streaming(monkeypatch, client)
 
@@ -258,6 +258,9 @@ def test_streaming_system_prompt_enforces_marker_rule(
     assert system_message["role"] == "system"
     assert "[#1]" in system_message["content"] or "[#" in system_message["content"]
     assert "plain text" in system_message["content"].lower()
+    assert "3~6개" in system_message["content"]
+    assert "확인 가능한 내용" in system_message["content"]
+    assert "답변 전체" in system_message["content"]
 
 
 # --- 2026-06-10 코드 리뷰(A7): try/finally 자원 정리 ---

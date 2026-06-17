@@ -45,7 +45,7 @@ def test_normal_response_enables_feedback() -> None:
         4120,
     )
     assert isinstance(response, QueryResponse)
-    assert response.answer == "EKS 노드는 32대입니다 [#1]."
+    assert response.answer == "EKS 노드는 32대입니다."
     assert response.feedback_enabled is True
     assert response.sources == sources
     assert response.verification == verification

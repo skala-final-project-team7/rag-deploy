@@ -88,6 +88,7 @@ from app.metrics import llm_fallback_total
 from app.pipeline.nodes import verify_pipeline_node
 from app.pipeline.query_graph import resolve_verify_llm_evaluator, run_query
 from app.query.acl import ACLViolationError, build_acl_filter
+from app.query.citation_display import CitationMarkerStreamFilter
 from app.query.formatter import format_response
 from app.query.openai_streaming import stream_openai_answer
 from app.query.titler import fallback_title, generate_conversation_title
@@ -508,6 +509,7 @@ async def _streaming_event_stream_inner(
     conservative_guard = bool(settings.generator_conservative_guard)
 
     accumulated_tokens: list[str] = []
+    display_filter = CitationMarkerStreamFilter()
     used_model = primary_model
     # feature19 status — streaming. 첫 token chunk 송신 직전 1회만 송신(fallback 재시도
     # 시에도 중복 송신하지 않도록 플래그로 한 번만 보낸다).
@@ -529,7 +531,9 @@ async def _streaming_event_stream_inner(
                 yield _status_event("streaming")
                 streaming_status_sent = True
             accumulated_tokens.append(token_chunk.text)
-            yield _token_event(token_chunk.text)
+            display_text = display_filter.feed(token_chunk.text)
+            if display_text:
+                yield _token_event(display_text)
     except RateLimitError:
         # 설계서 §4.6.5 — 429 시 fallback_model 로 1회 재시도.
         _LOGGER.warning(
@@ -549,6 +553,7 @@ async def _streaming_event_stream_inner(
             # 구분 안내문을 1회 송신한다(FE 화면·BFF 영속 모두 자연스러운 연결문이 됨).
             # 내부 accumulated_tokens 는 비워 검증/제목은 fallback 답변만 대상으로 한다.
             accumulated_tokens.clear()
+            display_filter = CitationMarkerStreamFilter()
             yield _token_event(_FALLBACK_RESTART_NOTICE)
         used_model = fallback_model
         async for token_chunk in _iter_offloaded(
@@ -566,9 +571,14 @@ async def _streaming_event_stream_inner(
                 yield _status_event("streaming")
                 streaming_status_sent = True
             accumulated_tokens.append(token_chunk.text)
-            yield _token_event(token_chunk.text)
+            display_text = display_filter.feed(token_chunk.text)
+            if display_text:
+                yield _token_event(display_text)
 
     answer = "".join(accumulated_tokens)
+    trailing_display_text = display_filter.flush()
+    if trailing_display_text:
+        yield _token_event(trailing_display_text)
     rerank_state.answer = answer
     rerank_state.used_llm = _resolve_used_llm(used_model)
 
@@ -597,7 +607,7 @@ async def _streaming_event_stream_inner(
     )
     # meta.title — 스트리밍된 실제 답변을 맥락으로 제목 생성. api-spec §1-1 Required: N.
     response.title = await asyncio.to_thread(
-        _resolve_title, request, question=state.query, answer=answer
+        _resolve_title, request, question=state.query, answer=response.answer or ""
     )
     # A5 — 차단 분기여도 token 재전송을 하지 않는다. BFF(backend-template ChatService)는
     # token 을 append-only 로 누적·영속하므로 재전송 시 "원본 답변+차단문" 연결문이
