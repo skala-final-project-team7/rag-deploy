@@ -22,7 +22,15 @@
 --------------------------------------------------
 """
 
-from sentence_transformers import SentenceTransformer
+from collections.abc import Callable
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError as exc:
+    SentenceTransformer: None | Callable[..., object] = None
+    _IMPORT_ERROR: Exception = exc
+else:
+    _IMPORT_ERROR = None
 
 from app.ingestion.embedder.base import DenseEmbedder
 
@@ -57,6 +65,11 @@ class E5DenseEmbedder(DenseEmbedder):
         device: str | None = None,
         batch_size: int = 32,
     ) -> None:
+        if _IMPORT_ERROR is not None or SentenceTransformer is None:
+            raise ModuleNotFoundError(
+                "sentence_transformers is required for E5DenseEmbedder; "
+                "install with `pip install lina-rag-pipeline[embedding]` (or `pip install sentence-transformers`)."
+            ) from _IMPORT_ERROR
         self._model = SentenceTransformer(model_name, device=device)
         self._batch_size = batch_size
         dim = self._model.get_sentence_embedding_dimension()

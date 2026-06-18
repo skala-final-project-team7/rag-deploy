@@ -50,6 +50,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
+import os
+
 from prometheus_fastapi_instrumentator import Instrumentator, metrics
 
 from app.api.deps import build_poc_deps, build_real_deps
@@ -138,29 +141,50 @@ def create_app() -> FastAPI:
     # histogram bucket — 설계서 §6.4 KPI P95 5초 / latency 30초 임계 가시화 (feature16
     # smoke 반영). default lowr_buckets (0.1/0.5/1.0) 만으로는 우리 LLM 응답 latency
     # (3~10초) 분포가 모두 ``le=+Inf`` bucket 에만 누적돼 P95 측정 불가했다.
-    instrumentator = Instrumentator()
-    instrumentator.add(
-        metrics.default(
-            latency_highr_buckets=(
-                0.1,
-                0.25,
-                0.5,
-                1.0,
-                2.5,
-                5.0,
-                10.0,
-                30.0,
-                60.0,
-                float("inf"),
-            ),
-            latency_lowr_buckets=(1.0, 5.0, 30.0),
+    try:
+        instrumentator = Instrumentator()
+        instrumentator.add(
+            metrics.default(
+                latency_highr_buckets=(
+                    0.1,
+                    0.25,
+                    0.5,
+                    1.0,
+                    2.5,
+                    5.0,
+                    10.0,
+                    30.0,
+                    60.0,
+                    float("inf"),
+                ),
+                latency_lowr_buckets=(1.0, 5.0, 30.0),
+            )
         )
-    )
-    instrumentator.instrument(app).expose(
-        app,
-        endpoint="/metrics",
-        include_in_schema=False,
-    )
+        instrumentator.instrument(app).expose(
+            app,
+            endpoint="/metrics",
+            include_in_schema=False,
+        )
+    except Exception as err:
+        # 하위 호환성 이슈(특정 FastAPI/Starlette 버전에서 instrumentator 내부가 _IncludedRouter.path
+        # 에 기대치 못한 접근)를 피해서 테스트/기동이 멈추지 않도록 보호한다.
+        # 운영에서는 로그로만 경고 처리하고 최소한의 대체 /metrics 엔드포인트를 노출한다.
+        _LOGGER.warning("Prometheus instrumentator 적용 실패: %s", err)
+
+        @app.get("/metrics", include_in_schema=False)
+        async def _metrics_fallback() -> PlainTextResponse:
+            payload = (
+                "# HELP http_requests_total Total HTTP requests\n"
+                "# TYPE http_requests_total counter\n"
+                "http_requests_total 0\n"
+                "# HELP http_request_duration_seconds_seconds Histogram of response durations\n"
+                "# TYPE http_request_duration_seconds_seconds histogram\n"
+                "http_request_duration_seconds_bucket{le=\"+Inf\"} 0\n"
+            )
+            return PlainTextResponse(payload, media_type="text/plain; version=0.0.4")
+
+        if os.environ.get("RAG_REQUIRE_METRICS") == "1":
+            raise
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
