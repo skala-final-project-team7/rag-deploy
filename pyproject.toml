@@ -7,7 +7,7 @@ description = "척척학사(LINA) Confluence 기반 RAG 챗봇 서비스의 RAG 
 requires-python = ">=3.11,<3.12"
 dependencies = [
     # --- AI Agents (ai-agent 레포에서 설치 — in-repo vendoring 대체)
-    "lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.8",
+    "lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.9",
     # --- API / 런타임 ---
     # fastapi 0.137.0 이 app.routes 에 .path 없는 _IncludedRouter(BaseRoute) 를 추가해
     # prometheus-fastapi-instrumentator 의 route 이름 해석(route.path)을 모든 요청에서 깨뜨린다
