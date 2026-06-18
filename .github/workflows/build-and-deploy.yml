@@ -83,6 +83,8 @@ env:
   MANIFEST_REPO_NAME: ${{ secrets.MANIFEST_REPO_NAME }}
   MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
   MANIFEST_REPO_EVENT: ${{ inputs.manifest_event != '' && inputs.manifest_event || secrets.MANIFEST_REPO_EVENT || 'harbor-image-updated' }}
+  MANIFEST_REPO_BRANCH: main
+  MANIFEST_VALUES_FILE: helm/applications/team7-app/values.yaml
 
   IMAGE_TAG_SHA: ${{ github.sha }}
 
@@ -281,61 +283,70 @@ jobs:
           echo "images=${IMAGES_JOINED}" >> "${GITHUB_OUTPUT}"
           echo "images_json=${IMAGES_JSON_ARRAY}" >> "${GITHUB_OUTPUT}"
 
-      - name: Prepare manifest trigger config
-        id: manifest_trigger_env
+      - name: Checkout manifest repository
+        if: ${{ env.MANIFEST_REPO_OWNER != '' && env.MANIFEST_REPO_NAME != '' && env.MANIFEST_REPO_TOKEN != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MANIFEST_REPO_OWNER }}/${{ env.MANIFEST_REPO_NAME }}
+          token: ${{ env.MANIFEST_REPO_TOKEN }}
+          path: manifest-repo
+          ref: ${{ env.MANIFEST_REPO_BRANCH }}
+
+      - name: Update manifest repository images
+        if: ${{ env.MANIFEST_REPO_OWNER != '' && env.MANIFEST_REPO_NAME != '' && env.MANIFEST_REPO_TOKEN != '' }}
         run: |
           set -euo pipefail
-          OWNER="$(echo "${MANIFEST_REPO_OWNER//$'\n'/}" | xargs)"
-          REPO_NAME="$(echo "${MANIFEST_REPO_NAME//$'\n'/}" | xargs)"
-          TOKEN="$(echo "${MANIFEST_REPO_TOKEN//$'\n'/}" | xargs)"
 
-          echo "manifest_owner=${OWNER}" >> "${GITHUB_OUTPUT}"
-          echo "manifest_repo=${REPO_NAME}" >> "${GITHUB_OUTPUT}"
-          if [ -n "${OWNER}" ] && [ -n "${REPO_NAME}" ] && [ -n "${TOKEN}" ]; then
-            echo "manifest_ready=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "manifest_ready=false" >> "${GITHUB_OUTPUT}"
+          TARGET_FILE="manifest-repo/${MANIFEST_VALUES_FILE}"
+          if [ -z "${MANIFEST_IMAGES}" ]; then
+            echo "No image list to update."
+            exit 0
           fi
-          echo "manifest_owner_len=${#OWNER}" >> "${GITHUB_OUTPUT}"
-          echo "manifest_repo_len=${#REPO_NAME}" >> "${GITHUB_OUTPUT}"
-          echo "manifest_token_len=${#TOKEN}" >> "${GITHUB_OUTPUT}"
+
+          if [ ! -f "${TARGET_FILE}" ]; then
+            echo "Manifest values file not found: ${TARGET_FILE}" >&2
+            exit 1
+          fi
+
+          UPDATED=0
+          for RAW_IMAGE in ${MANIFEST_IMAGES}; do
+            IMAGE_NAME="${RAW_IMAGE%:*}"
+            IMAGE_TAG="${RAW_IMAGE##*:}"
+            IMAGE_REPO="${IMAGE_NAME##*/}"
+            echo "Updating image repository=${IMAGE_REPO} to tag=${IMAGE_TAG}"
+
+            if ! grep -qE "^[[:space:]]*repository:[[:space:]]*${IMAGE_REPO}[[:space:]]*$" "${TARGET_FILE}"; then
+              echo "No matching repository entry for ${IMAGE_REPO} in ${TARGET_FILE}."
+              continue
+            fi
+
+            sed -i "/^[[:space:]]*repository:[[:space:]]*${IMAGE_REPO}[[:space:]]*$/ {
+                n
+                s#^\\([[:space:]]*tag:[[:space:]]*\\).*#\\1${IMAGE_TAG}#
+              }" "${TARGET_FILE}"
+            UPDATED=1
+          done
+
+          if [ "${UPDATED}" -eq 0 ]; then
+            echo "No manifest files were updated."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${MANIFEST_VALUES_FILE}"
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes staged."
+            exit 0
+          fi
+
+          git commit -m "Update image tags to ${IMAGE_TAG_SHA}"
+          git push origin "${MANIFEST_REPO_BRANCH}"
         env:
-          MANIFEST_REPO_OWNER: ${{ secrets.MANIFEST_REPO_OWNER }}
-          MANIFEST_REPO_NAME: ${{ secrets.MANIFEST_REPO_NAME }}
-          MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
-
-      - name: Trigger manifest repository image tag update
-        if: ${{ steps.manifest_trigger_env.outputs.manifest_ready == 'true' }}
-        run: |
-          set -euo pipefail
-
-          cat > /tmp/dispatch.json <<EOF
-          {
-            "event_type": "${MANIFEST_REPO_EVENT}",
-            "client_payload": {
-              "repository": "${GITHUB_REPOSITORY}",
-              "branch": "${GITHUB_REF_NAME}",
-              "tag": "${IMAGE_TAG_SHA}",
-              "sha": "${IMAGE_TAG_SHA}",
-              "images": ${MANIFEST_IMAGES}
-            }
-          }
-          EOF
-
-          curl -fsSL -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${MANIFEST_REPO_TOKEN}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${MANIFEST_REPO_OWNER}/${MANIFEST_REPO_NAME}/dispatches" \
-            -d @/tmp/dispatch.json
-        env:
-          MANIFEST_IMAGES: ${{ steps.push-images.outputs.images_json }}
-          MANIFEST_REPO_OWNER: ${{ steps.manifest_trigger_env.outputs.manifest_owner }}
-          MANIFEST_REPO_NAME: ${{ steps.manifest_trigger_env.outputs.manifest_repo }}
-          MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
-          MANIFEST_REPO_EVENT: ${{ inputs.manifest_event != '' && inputs.manifest_event || secrets.MANIFEST_REPO_EVENT || 'harbor-image-updated' }}
+          MANIFEST_IMAGES: ${{ steps.push-images.outputs.images }}
 
       - name: Skip manifest trigger when secrets are not configured
-        if: ${{ steps.manifest_trigger_env.outputs.manifest_ready != 'true' }}
+        if: ${{ !(env.MANIFEST_REPO_OWNER != '' && env.MANIFEST_REPO_NAME != '' && env.MANIFEST_REPO_TOKEN != '') }}
         run: |
           echo "Manifest repository trigger is skipped. Set MANIFEST_REPO_OWNER, MANIFEST_REPO_NAME, MANIFEST_REPO_TOKEN secrets to enable."
