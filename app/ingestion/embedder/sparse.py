@@ -22,7 +22,10 @@
 --------------------------------------------------
 """
 
-from fastembed import SparseTextEmbedding
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 from app.ingestion.embedder.base import SparseEmbedder, SparseVector
 
@@ -51,6 +54,14 @@ class BM25SparseEmbedder(SparseEmbedder):
         *,
         cache_dir: str | None = None,
     ) -> None:
+        try:
+            from fastembed import SparseTextEmbedding
+        except ImportError as exc:
+            raise ModuleNotFoundError(
+                "fastembed is required for BM25SparseEmbedder; "
+                "install with `pip install lina-rag-pipeline[embedding]` or "
+                "`pip install fastembed`."
+            ) from exc
         self._model = SparseTextEmbedding(model_name=model_name, cache_dir=cache_dir)
 
     def encode_passages(self, texts: list[str]) -> list[SparseVector]:

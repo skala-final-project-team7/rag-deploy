@@ -10,6 +10,14 @@ on:
       - deploy
   workflow_dispatch:
     inputs:
+      install_extras:
+        description: "Docker build-arg INSTALL_EXTRAS (예: ingestion,embedding)"
+        required: false
+        default: "ingestion"
+      rag_use_real_adapters:
+        description: "운영 어댑터 사용 여부 (Docker build-arg RAG_USE_REAL_ADAPTERS)"
+        required: false
+        default: "false"
       services:
         description: "빌드할 서비스 목록(쉼표 구분). 비어두면 Dockerfile.* 자동 탐지"
         required: false
@@ -73,6 +81,8 @@ jobs:
     with:
       services: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.services || '' }}
       run_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_number || github.run_number }}
+      install_extras: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.install_extras || 'ingestion' }}
+      rag_use_real_adapters: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rag_use_real_adapters || 'false' }}
       build_target: runtime
       build_platforms: "linux/amd64"
     secrets:

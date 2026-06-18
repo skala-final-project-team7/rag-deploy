@@ -8,6 +8,16 @@ on:
         required: false
         type: string
         default: ""
+      install_extras:
+        description: "INSTALL_EXTRAS build arg"
+        required: false
+        type: string
+        default: "ingestion"
+      rag_use_real_adapters:
+        description: "RAG_USE_REAL_ADAPTERS build arg"
+        required: false
+        type: string
+        default: "false"
       service_name:
         description: "Single service name"
         required: false
@@ -151,6 +161,8 @@ jobs:
           INPUT_SERVICE_NAME: ${{ inputs.service_name }}
           INPUT_DOCKERFILE: ${{ inputs.dockerfile }}
           INPUT_CONTEXT: ${{ inputs.context }}
+          INPUT_INSTALL_EXTRAS: ${{ inputs.install_extras }}
+          INPUT_RAG_USE_REAL_ADAPTERS: ${{ inputs.rag_use_real_adapters }}
           INPUT_TARGET: ${{ inputs.build_target }}
           INPUT_PLATFORM: ${{ inputs.build_platforms }}
           INPUT_RUN_NUMBER: ${{ inputs.run_number || github.run_number }}
@@ -239,6 +251,8 @@ jobs:
               --platform "${INPUT_PLATFORM}"
               --progress plain
               --push
+              --build-arg "INSTALL_EXTRAS=${INPUT_INSTALL_EXTRAS}"
+              --build-arg "RAG_USE_REAL_ADAPTERS=${INPUT_RAG_USE_REAL_ADAPTERS}"
               --cache-from "type=gha,scope=${CACHE_SCOPE}"
               --cache-to "type=gha,mode=max,scope=${CACHE_SCOPE}"
               "${TAG_ARGS[@]}"

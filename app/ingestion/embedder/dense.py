@@ -22,17 +22,10 @@
 --------------------------------------------------
 """
 
-from typing import Any
-from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
-try:
-    from sentence_transformers import SentenceTransformer as _SentenceTransformerImpl
-except ImportError as exc:
-    _sentence_transformer_ctor: Callable[..., Any] | None = None
-    _IMPORT_ERROR: Exception | None = exc
-else:
-    _sentence_transformer_ctor = _SentenceTransformerImpl
-    _IMPORT_ERROR = None
+if TYPE_CHECKING:
+    pass
 
 from app.ingestion.embedder.base import DenseEmbedder
 
@@ -71,13 +64,15 @@ class E5DenseEmbedder(DenseEmbedder):
         self._batch_size: int
         self._dimension: int
 
-        if _IMPORT_ERROR is not None or _sentence_transformer_ctor is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
             raise ModuleNotFoundError(
                 "sentence_transformers is required for E5DenseEmbedder; "
                 "install with `pip install lina-rag-pipeline[embedding]` or "
                 "`pip install sentence-transformers`."
-            ) from _IMPORT_ERROR
-        self._model = _sentence_transformer_ctor(model_name, device=device)
+            ) from exc
+        self._model = SentenceTransformer(model_name, device=device)
         self._batch_size = batch_size
         dim = self._model.get_sentence_embedding_dimension()
         if dim is None:

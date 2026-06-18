@@ -30,8 +30,7 @@
 """
 
 import math
-
-from sentence_transformers import CrossEncoder
+from typing import Any
 
 from app.query.reranker.base import CrossEncoderReranker
 
@@ -70,8 +69,19 @@ class CrossEncoderRerankerImpl(CrossEncoderReranker):
         batch_size: int = 32,
         temperature: float = 1.0,
     ) -> None:
+        self._model: Any
+        self._batch_size: int
+        self._temperature: float
         if temperature <= 0:
             raise ValueError(f"temperature 는 0 보다 커야 한다 (받은 값: {temperature})")
+        try:
+            from sentence_transformers import CrossEncoder
+        except ImportError as exc:
+            raise ModuleNotFoundError(
+                "sentence_transformers is required for CrossEncoderRerankerImpl; "
+                "install with `pip install lina-rag-pipeline[embedding]` or "
+                "`pip install sentence-transformers`."
+            ) from exc
         self._model = CrossEncoder(model_name, device=device)
         self._batch_size = batch_size
         self._temperature = temperature
