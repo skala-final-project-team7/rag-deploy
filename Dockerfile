@@ -13,6 +13,7 @@ ARG RAG_USE_REAL_ADAPTERS=false
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
     RAG_USE_REAL_ADAPTERS=${RAG_USE_REAL_ADAPTERS} \
     PATH="/root/.local/bin:${PATH}"
 
@@ -25,10 +26,11 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # [3] 변경 빈도 낮은 의존성 파일만 먼저 복사해 캐시 적중률 높임
 COPY pyproject.toml ./
 
-# [4] pip 캐시 마운트로 wheel/패키지 다운로드 재활용
+# [4] pip + uv 캐시 마운트로 wheel/패키지 다운로드 재활용
 # 운영 모드 필수 의존성(예: sentence-transformers) 포함을 위해 기본적으로 ingestion+embedding 설치.
 # PoC 배포로 경량화가 필요하면 빌드시 --build-arg INSTALL_EXTRAS=ingestion 로 오버라이드 가능.
 RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cache/uv \
     pip install --no-cache-dir -U pip \
     && pip install --no-cache-dir uv \
     && uv pip install --system -e ".[${INSTALL_EXTRAS}]"
