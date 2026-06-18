@@ -281,8 +281,31 @@ jobs:
           echo "images=${IMAGES_JOINED}" >> "${GITHUB_OUTPUT}"
           echo "images_json=${IMAGES_JSON_ARRAY}" >> "${GITHUB_OUTPUT}"
 
+      - name: Prepare manifest trigger config
+        id: manifest_trigger_env
+        run: |
+          set -euo pipefail
+          OWNER="$(echo "${MANIFEST_REPO_OWNER//$'\n'/}" | xargs)"
+          REPO_NAME="$(echo "${MANIFEST_REPO_NAME//$'\n'/}" | xargs)"
+          TOKEN="$(echo "${MANIFEST_REPO_TOKEN//$'\n'/}" | xargs)"
+
+          echo "manifest_owner=${OWNER}" >> "${GITHUB_OUTPUT}"
+          echo "manifest_repo=${REPO_NAME}" >> "${GITHUB_OUTPUT}"
+          if [ -n "${OWNER}" ] && [ -n "${REPO_NAME}" ] && [ -n "${TOKEN}" ]; then
+            echo "manifest_ready=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "manifest_ready=false" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "manifest_owner_len=${#OWNER}" >> "${GITHUB_OUTPUT}"
+          echo "manifest_repo_len=${#REPO_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "manifest_token_len=${#TOKEN}" >> "${GITHUB_OUTPUT}"
+        env:
+          MANIFEST_REPO_OWNER: ${{ secrets.MANIFEST_REPO_OWNER }}
+          MANIFEST_REPO_NAME: ${{ secrets.MANIFEST_REPO_NAME }}
+          MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
+
       - name: Trigger manifest repository image tag update
-        if: ${{ env.MANIFEST_REPO_OWNER != '' && env.MANIFEST_REPO_NAME != '' && env.MANIFEST_REPO_TOKEN != '' }}
+        if: ${{ steps.manifest_trigger_env.outputs.manifest_ready == 'true' }}
         run: |
           set -euo pipefail
 
@@ -307,8 +330,12 @@ jobs:
             -d @/tmp/dispatch.json
         env:
           MANIFEST_IMAGES: ${{ steps.push-images.outputs.images_json }}
+          MANIFEST_REPO_OWNER: ${{ steps.manifest_trigger_env.outputs.manifest_owner }}
+          MANIFEST_REPO_NAME: ${{ steps.manifest_trigger_env.outputs.manifest_repo }}
+          MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
+          MANIFEST_REPO_EVENT: ${{ inputs.manifest_event != '' && inputs.manifest_event || secrets.MANIFEST_REPO_EVENT || 'harbor-image-updated' }}
 
       - name: Skip manifest trigger when secrets are not configured
-        if: ${{ !(env.MANIFEST_REPO_OWNER != '' && env.MANIFEST_REPO_NAME != '' && env.MANIFEST_REPO_TOKEN != '') }}
+        if: ${{ steps.manifest_trigger_env.outputs.manifest_ready != 'true' }}
         run: |
           echo "Manifest repository trigger is skipped. Set MANIFEST_REPO_OWNER, MANIFEST_REPO_NAME, MANIFEST_REPO_TOKEN secrets to enable."
