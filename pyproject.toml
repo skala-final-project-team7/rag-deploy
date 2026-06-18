@@ -9,7 +9,7 @@ dependencies = [
     # --- AI Agents (ai-agent 레포에서 설치 — in-repo vendoring 대체)
     "lina-ai-agents @ git+https://github.com/skala-final-project-team7/ai-agent.git@v0.1.1",
     # --- API / 런타임 ---
-    "fastapi>=0.111",
+    "fastapi>=0.111,<0.137",
     "uvicorn[standard]>=0.30",
     "sse-starlette>=2.1",          # 답변 생성기 SSE 스트리밍
     "pydantic>=2.7",
@@ -32,13 +32,13 @@ dependencies = [
     # 자동 수집. 설계서 §6.4 KPI 표의 'Query 파이프라인 entry → SSE 첫 토큰 latency'
     # 일부를 HTTP 표준 메트릭으로 충당한다. LLM 커스텀 메트릭(환각 비율·Precision@3 등)
     # 은 feature17(평가 세션) 으로 이관.
-    "prometheus-fastapi-instrumentator>=7.0",
+    "prometheus-fastapi-instrumentator>=7.0,<8",
+    "sentence-transformers>=3.0",  # 운영 모드 필수 의존성
 ]
 
 [project.optional-dependencies]
 # 임베딩 / 재순위화 / Sparse 토크나이저 (heavy — torch 포함)
 embedding = [
-    "sentence-transformers>=3.0",  # multilingual-e5-large Dense + cross-encoder 재순위화
     "fastembed>=0.3",              # BM25 Sparse 벡터 (대안)
     "kiwipiepy>=0.17",             # 한국어 형태소 분석 (KoNLPy Mecab 대안, JDK 불필요)
 ]
