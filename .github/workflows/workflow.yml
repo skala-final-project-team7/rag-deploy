@@ -1,0 +1,85 @@
+name: Build and Deploy to Harbor
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches:
+      - deploy
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "빌드할 서비스 목록(쉼표 구분). 비어두면 Dockerfile.* 자동 탐지"
+        required: false
+        default: ""
+      run_number:
+        description: "run_number 대체값(비어 있으면 GitHub run_number 사용)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  HARBOR_URL: ${{ secrets.HARBOR_URL }}
+  HARBOR_ID: ${{ secrets.HARBOR_ID }}
+  HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+  HARBOR_NAMESPACE: ${{ secrets.HARBOR_NAMESPACE }}
+
+  MANIFEST_REPO_OWNER: ${{ secrets.MANIFEST_REPO_OWNER }}
+  MANIFEST_REPO_NAME: ${{ secrets.MANIFEST_REPO_NAME }}
+  MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
+  MANIFEST_REPO_EVENT: ${{ secrets.MANIFEST_REPO_EVENT || 'harbor-image-updated' }}
+
+jobs:
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,ingestion]"
+
+      - name: Run verification
+        run: |
+          set -euo pipefail
+          source .venv/bin/activate
+          ./scripts/verify.sh
+
+  build-and-deploy:
+    name: Build & Push Docker Images to Harbor
+    needs: quality-gate
+    uses: ./.github/workflows/_core/build-and-deploy.yml
+    with:
+      services: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.services || '' }}
+      run_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_number || github.run_number }}
+      build_target: runtime
+      build_platforms: "linux/amd64"
+      manifest_event: ${{ secrets.MANIFEST_REPO_EVENT || 'harbor-image-updated' }}
+    secrets:
+      HARBOR_URL: ${{ secrets.HARBOR_URL }}
+      HARBOR_ID: ${{ secrets.HARBOR_ID }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      HARBOR_NAMESPACE: ${{ secrets.HARBOR_NAMESPACE }}
+      MANIFEST_REPO_OWNER: ${{ secrets.MANIFEST_REPO_OWNER }}
+      MANIFEST_REPO_NAME: ${{ secrets.MANIFEST_REPO_NAME }}
+      MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
