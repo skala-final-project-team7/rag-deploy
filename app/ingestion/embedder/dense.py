@@ -23,6 +23,7 @@
 """
 
 from collections.abc import Callable
+from typing import Any
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -65,6 +66,10 @@ class E5DenseEmbedder(DenseEmbedder):
         device: str | None = None,
         batch_size: int = 32,
     ) -> None:
+        self._model: Any
+        self._batch_size: int
+        self._dimension: int
+
         if _IMPORT_ERROR is not None or SentenceTransformer is None:
             raise ModuleNotFoundError(
                 "sentence_transformers is required for E5DenseEmbedder; "
