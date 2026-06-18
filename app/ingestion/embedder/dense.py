@@ -68,7 +68,8 @@ class E5DenseEmbedder(DenseEmbedder):
         if _IMPORT_ERROR is not None or SentenceTransformer is None:
             raise ModuleNotFoundError(
                 "sentence_transformers is required for E5DenseEmbedder; "
-                "install with `pip install lina-rag-pipeline[embedding]` (or `pip install sentence-transformers`)."
+                "install with `pip install lina-rag-pipeline[embedding]` or "
+                "`pip install sentence-transformers`."
             ) from _IMPORT_ERROR
         self._model = SentenceTransformer(model_name, device=device)
         self._batch_size = batch_size

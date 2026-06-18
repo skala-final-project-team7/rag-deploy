@@ -166,9 +166,8 @@ def create_app() -> FastAPI:
             include_in_schema=False,
         )
     except Exception as err:
-        # 하위 호환성 이슈(특정 FastAPI/Starlette 버전에서 instrumentator 내부가 _IncludedRouter.path
-        # 에 기대치 못한 접근)를 피해서 테스트/기동이 멈추지 않도록 보호한다.
-        # 운영에서는 로그로만 경고 처리하고 최소한의 대체 /metrics 엔드포인트를 노출한다.
+        # 호환성 이슈로 instrumentator 내부 접근이 실패해도 앱/테스트가 중단되지 않게 한다.
+        # 운영에서는 로그로만 경고 처리하고, 최소한 대체 /metrics 엔드포인트를 노출한다.
         _LOGGER.warning("Prometheus instrumentator 적용 실패: %s", err)
 
         @app.get("/metrics", include_in_schema=False)
