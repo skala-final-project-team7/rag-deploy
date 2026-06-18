@@ -170,6 +170,7 @@ jobs:
           set -euo pipefail
 
           SERVICES_CSV="${INPUT_SERVICES}"
+          REPO_SERVICE_NAME="${GITHUB_REPOSITORY##*/}"
           if [ -z "${SERVICES_CSV}" ]; then
             if [ -n "${INPUT_SERVICE_NAME}" ] && [ -n "${INPUT_DOCKERFILE}" ]; then
               SERVICES_CSV="${INPUT_SERVICE_NAME}"
@@ -181,7 +182,7 @@ jobs:
                   | awk -F/ 'NF==2 {print $1}' \
                   | sort -u)
                 if [ "${#DETECTED_SERVICES[@]}" -eq 0 ] && [ -f Dockerfile ]; then
-                  DETECTED_SERVICES=("default")
+                  DETECTED_SERVICES=("${REPO_SERVICE_NAME}")
                 elif [ "${#DETECTED_SERVICES[@]}" -eq 0 ]; then
                   echo "Dockerfile을 찾지 못해 빌드 대상을 결정할 수 없습니다." >&2
                   exit 1
@@ -211,7 +212,7 @@ jobs:
             DOCKERFILE="${INPUT_DOCKERFILE}"
             CONTEXT="${INPUT_CONTEXT}"
             if [ "${SINGLE_MODE}" = "false" ] || [ "${SERVICE}" = "default" ]; then
-              if [ "${SERVICE}" = "default" ]; then
+              if [ "${SERVICE}" = "default" ] || [ "${SERVICE}" = "${REPO_SERVICE_NAME}" ]; then
                 DOCKERFILE="Dockerfile"
                 CONTEXT="."
               elif [ -f "Dockerfile.${SERVICE}" ]; then
