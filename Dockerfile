@@ -24,7 +24,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 # [3] 변경 빈도 낮은 의존성 파일만 먼저 복사해 캐시 적중률 높임
 COPY pyproject.toml ./
-COPY poetry.lock ./
 
 # [4] pip 캐시 마운트로 wheel/패키지 다운로드 재활용
 RUN --mount=type=cache,target=/root/.cache/pip \
