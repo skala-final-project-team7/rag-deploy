@@ -68,7 +68,7 @@ jobs:
   build-and-deploy:
     name: Build & Push Docker Images to Harbor
     needs: quality-gate
-    uses: ./.github/workflows/_core/build-and-deploy.yml
+    uses: ./.github/workflows/build-and-deploy.yml
     with:
       services: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.services || '' }}
       run_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_number || github.run_number }}
