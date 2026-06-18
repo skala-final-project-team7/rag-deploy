@@ -42,7 +42,7 @@ on:
         description: "repository_dispatch event type"
         required: false
         type: string
-        default: "harbor-image-updated"
+        default: ""
     secrets:
       HARBOR_URL:
         required: true
@@ -72,7 +72,7 @@ env:
   MANIFEST_REPO_OWNER: ${{ secrets.MANIFEST_REPO_OWNER }}
   MANIFEST_REPO_NAME: ${{ secrets.MANIFEST_REPO_NAME }}
   MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
-  MANIFEST_REPO_EVENT: ${{ inputs.manifest_event }}
+  MANIFEST_REPO_EVENT: ${{ inputs.manifest_event != '' && inputs.manifest_event || secrets.MANIFEST_REPO_EVENT || 'harbor-image-updated' }}
 
   IMAGE_TAG_SHA: ${{ github.sha }}
 
