@@ -94,6 +94,7 @@ from app.query.titler import fallback_title, generate_conversation_title
 from app.schemas.enums import Intent, LlmModel
 from app.schemas.rag_state import HistoryTurn, RagState
 from app.schemas.response import QueryResponse, VerificationSummary
+from app.telemetry import start_span
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -316,7 +317,14 @@ async def _non_streaming_event_stream(
     try:
         # run_query 는 검색·생성·검증까지 수행하는 동기 블로킹 호출 — 이벤트 루프를
         # 막지 않도록 worker thread 로 오프로드한다(코드 리뷰 A1).
-        response = await asyncio.to_thread(run_query, state, graph=graph)
+        with start_span(
+            "rag.query.non_streaming",
+            {
+                "rag.stream": False,
+                "rag.conversation_id": state.conversation_id or "",
+            },
+        ):
+            response = await asyncio.to_thread(run_query, state, graph=graph)
     except ACLViolationError:
         # 시스템 단 안전망 — build_acl_filter는 항상 유효 필터를 만들므로 정상 흐름에선
         # 도달하지 않지만, 그래프 내부 버그/우회 시 ACL 위반이 표면화되어야 한다.
@@ -331,9 +339,10 @@ async def _non_streaming_event_stream(
     yield _status_event("formatting")
     # meta.title — 답변 산출 후 제목 생성(실패 시 fallback). api-spec §1-1 Required: N.
     # 제목 생성도 OpenAI 동기 호출(최대 10s) — 동일하게 오프로드.
-    response.title = await asyncio.to_thread(
-        _resolve_title, request, question=state.query, answer=response.answer or ""
-    )
+    with start_span("rag.title"):
+        response.title = await asyncio.to_thread(
+            _resolve_title, request, question=state.query, answer=response.answer or ""
+        )
     for event in _sse_payload(response):
         yield event
 
@@ -446,7 +455,14 @@ async def _streaming_event_stream_inner(
     yield _status_event("searching")
     # 그래프 invoke 는 임베딩·Qdrant 검색·rerank 까지 수행하는 동기 블로킹 호출 —
     # worker thread 로 오프로드해 이벤트 루프를 보호한다(코드 리뷰 A1).
-    result_dict = await asyncio.to_thread(streaming_graph.invoke, state)
+    with start_span(
+        "rag.streaming.graph",
+        {
+            "rag.stream": True,
+            "rag.conversation_id": state.conversation_id or "",
+        },
+    ):
+        result_dict = await asyncio.to_thread(streaming_graph.invoke, state)
     rerank_state = RagState.model_validate(result_dict)
 
     intent = rerank_state.intent or Intent.OPERATION_GUIDE
@@ -459,18 +475,26 @@ async def _streaming_event_stream_inner(
         used_llm = rerank_state.used_llm or LlmModel.GPT_4O_MINI
         yield _status_event("formatting")
         elapsed_ms = (time.perf_counter_ns() - started) // 1_000_000
-        response = format_response(
-            answer=rerank_state.answer or "",
-            sources=rerank_state.sources,
-            verification=rerank_state.verification,
-            intent=intent,
-            used_llm=used_llm,
-            latency_ms=int(elapsed_ms),
-        )
+        with start_span(
+            "rag.format_response",
+            {
+                "rag.retrieval_empty": True,
+                "rag.source_count": len(rerank_state.sources),
+            },
+        ):
+            response = format_response(
+                answer=rerank_state.answer or "",
+                sources=rerank_state.sources,
+                verification=rerank_state.verification,
+                intent=intent,
+                used_llm=used_llm,
+                latency_ms=int(elapsed_ms),
+            )
         # meta.title — 0건 분기도 제목을 채운다(질문 기반). api-spec §1-1 Required: N.
-        response.title = await asyncio.to_thread(
-            _resolve_title, request, question=state.query, answer=response.answer or ""
-        )
+        with start_span("rag.title"):
+            response.title = await asyncio.to_thread(
+                _resolve_title, request, question=state.query, answer=response.answer or ""
+            )
         for event in _sse_payload(response):
             yield event
         return
@@ -514,22 +538,39 @@ async def _streaming_event_stream_inner(
     streaming_status_sent = False
     try:
         # 동기 OpenAI streaming iterator 는 _iter_offloaded 로 항목별 thread 오프로드(A1).
-        async for token_chunk in _iter_offloaded(
-            stream_openai_answer(
-                api_key=api_key,
-                model=primary_model,
-                temperature=temperature,
-                timeout_seconds=timeout_seconds,
-                query=answer_query,
-                top_chunks=rerank_state.top_chunks,
-                conservative_guard=conservative_guard,
-            )
-        ):
-            if not streaming_status_sent:
-                yield _status_event("streaming")
-                streaming_status_sent = True
-            accumulated_tokens.append(token_chunk.text)
-            yield _token_event(token_chunk.text)
+        stream_started = time.perf_counter_ns()
+        token_count = 0
+        with start_span(
+            "rag.llm.stream",
+            {
+                "llm.model": primary_model,
+                "rag.top_chunk_count": len(rerank_state.top_chunks),
+                "rag.fallback": False,
+            },
+        ) as span:
+            async for token_chunk in _iter_offloaded(
+                stream_openai_answer(
+                    api_key=api_key,
+                    model=primary_model,
+                    temperature=temperature,
+                    timeout_seconds=timeout_seconds,
+                    query=answer_query,
+                    top_chunks=rerank_state.top_chunks,
+                    conservative_guard=conservative_guard,
+                )
+            ):
+                token_count += 1
+                if token_count == 1:
+                    span.set_attribute(
+                        "rag.first_token_ms",
+                        (time.perf_counter_ns() - stream_started) // 1_000_000,
+                    )
+                if not streaming_status_sent:
+                    yield _status_event("streaming")
+                    streaming_status_sent = True
+                accumulated_tokens.append(token_chunk.text)
+                yield _token_event(token_chunk.text)
+            span.set_attribute("rag.token_chunk_count", token_count)
     except RateLimitError:
         # 설계서 §4.6.5 — 429 시 fallback_model 로 1회 재시도.
         _LOGGER.warning(
@@ -551,22 +592,39 @@ async def _streaming_event_stream_inner(
             accumulated_tokens.clear()
             yield _token_event(_FALLBACK_RESTART_NOTICE)
         used_model = fallback_model
-        async for token_chunk in _iter_offloaded(
-            stream_openai_answer(
-                api_key=api_key,
-                model=fallback_model,
-                temperature=temperature,
-                timeout_seconds=timeout_seconds,
-                query=answer_query,
-                top_chunks=rerank_state.top_chunks,
-                conservative_guard=conservative_guard,
-            )
-        ):
-            if not streaming_status_sent:
-                yield _status_event("streaming")
-                streaming_status_sent = True
-            accumulated_tokens.append(token_chunk.text)
-            yield _token_event(token_chunk.text)
+        stream_started = time.perf_counter_ns()
+        token_count = 0
+        with start_span(
+            "rag.llm.stream",
+            {
+                "llm.model": fallback_model,
+                "rag.top_chunk_count": len(rerank_state.top_chunks),
+                "rag.fallback": True,
+            },
+        ) as span:
+            async for token_chunk in _iter_offloaded(
+                stream_openai_answer(
+                    api_key=api_key,
+                    model=fallback_model,
+                    temperature=temperature,
+                    timeout_seconds=timeout_seconds,
+                    query=answer_query,
+                    top_chunks=rerank_state.top_chunks,
+                    conservative_guard=conservative_guard,
+                )
+            ):
+                token_count += 1
+                if token_count == 1:
+                    span.set_attribute(
+                        "rag.first_token_ms",
+                        (time.perf_counter_ns() - stream_started) // 1_000_000,
+                    )
+                if not streaming_status_sent:
+                    yield _status_event("streaming")
+                    streaming_status_sent = True
+                accumulated_tokens.append(token_chunk.text)
+                yield _token_event(token_chunk.text)
+            span.set_attribute("rag.token_chunk_count", token_count)
 
     answer = "".join(accumulated_tokens)
     rerank_state.answer = answer
@@ -582,23 +640,38 @@ async def _streaming_event_stream_inner(
     # status 는 진행 표시용이라 실제 검증 연산 직후에 보내도 무방하다(검색 4단계도 단일
     # ``searching`` phase 로 묶어 송신하는 것과 동일한 절충).
     # 검증 2단계는 OpenAI evaluator 동기 호출을 포함 — 동일하게 오프로드(A1).
-    await asyncio.to_thread(
-        verify_pipeline_node, rerank_state, llm_evaluator=resolve_verify_llm_evaluator(deps)
-    )
+    with start_span(
+        "rag.streaming.verify",
+        {
+            "rag.answer_length": len(answer),
+            "rag.top_chunk_count": len(rerank_state.top_chunks),
+        },
+    ):
+        await asyncio.to_thread(
+            verify_pipeline_node, rerank_state, llm_evaluator=resolve_verify_llm_evaluator(deps)
+        )
 
     elapsed_ms = (time.perf_counter_ns() - started) // 1_000_000
-    response = format_response(
-        answer=rerank_state.answer,
-        sources=rerank_state.sources,
-        verification=rerank_state.verification,
-        intent=intent,
-        used_llm=rerank_state.used_llm,
-        latency_ms=int(elapsed_ms),
-    )
+    with start_span(
+        "rag.format_response",
+        {
+            "rag.source_count": len(rerank_state.sources),
+            "rag.verification_count": len(rerank_state.verification),
+        },
+    ):
+        response = format_response(
+            answer=rerank_state.answer,
+            sources=rerank_state.sources,
+            verification=rerank_state.verification,
+            intent=intent,
+            used_llm=rerank_state.used_llm,
+            latency_ms=int(elapsed_ms),
+        )
     # meta.title — 스트리밍된 실제 답변을 맥락으로 제목 생성. api-spec §1-1 Required: N.
-    response.title = await asyncio.to_thread(
-        _resolve_title, request, question=state.query, answer=answer
-    )
+    with start_span("rag.title"):
+        response.title = await asyncio.to_thread(
+            _resolve_title, request, question=state.query, answer=answer
+        )
     # A5 — 차단 분기여도 token 재전송을 하지 않는다. BFF(backend-template ChatService)는
     # token 을 append-only 로 누적·영속하므로 재전송 시 "원본 답변+차단문" 연결문이
     # 그대로 저장·표시된다(덮어쓰기 시맨틱 없음 — 확인: 2026-06-10). 차단 신호는 바로

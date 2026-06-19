@@ -140,6 +140,9 @@ def create_app() -> FastAPI:
         description="척척학사(LINA) Confluence 기반 RAG 챗봇 서비스의 RAG 파이프라인",
         lifespan=_lifespan,
     )
+    from app.telemetry import initialize_tracing
+
+    initialize_tracing(app, get_settings())
     app.include_router(query_router)
 
     # 운영 모니터링 — Prometheus instrumentator (feature12, PDF 0518_RAG.pdf #4).

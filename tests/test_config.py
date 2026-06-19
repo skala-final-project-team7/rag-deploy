@@ -36,6 +36,8 @@ def test_settings_instantiates_with_defaults() -> None:
     assert settings.llm_answer_model == "gpt-4o"
     assert settings.llm_aux_model == "gpt-4o-mini"
     assert settings.openai_api_key.get_secret_value() == ""
+    assert settings.otel_enabled is False
+    assert settings.otel_service_name == "rag-deploy"
 
 
 def test_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,3 +82,17 @@ def test_settings_use_real_adapters_env_override(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("RAG_USE_REAL_ADAPTERS", "true")
     settings = Settings(_env_file=None)  # type: ignore[arg-type]
     assert settings.use_real_adapters is True
+
+
+def test_settings_otel_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAG_OTEL_ENABLED", "true")
+    monkeypatch.setenv("RAG_OTEL_SERVICE_NAME", "rag-test")
+    monkeypatch.setenv("RAG_OTEL_ENVIRONMENT", "staging")
+    monkeypatch.setenv("RAG_OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4317")
+
+    settings = Settings(_env_file=None)  # type: ignore[arg-type]
+
+    assert settings.otel_enabled is True
+    assert settings.otel_service_name == "rag-test"
+    assert settings.otel_environment == "staging"
+    assert settings.otel_exporter_otlp_endpoint == "http://collector:4317"

@@ -92,6 +92,7 @@ from app.schemas.rag_state import RagState
 from app.schemas.response import QueryResponse
 from app.storage.chunk_lookup import ChunkTextLookup, FakeChunkTextLookup
 from app.storage.qdrant_client import QdrantPoolStore
+from app.telemetry import traced_callable
 
 # history-manager-agent의 LLM provider / config — runtime 인터페이스 의존성 회피를 위해 Any.
 # 실제 타입은 HistoryLLMProvider / HistoryManagerConfig. manage_history 가 None 일 때
@@ -226,10 +227,13 @@ def build_query_graph(deps: QueryGraphDeps) -> Any:
     # 히스토리 관리자 노드는 RagState.history 필드와 충돌하므로 'manage_history'로 둔다.
     builder.add_node(
         "manage_history",
-        partial(
-            manage_history,
-            provider=deps.history_provider,
-            history_config=deps.history_config,
+        traced_callable(
+            "rag.manage_history",
+            partial(
+                manage_history,
+                provider=deps.history_provider,
+                history_config=deps.history_config,
+            ),
         ),
     )
     # 라우터 노드는 manage_router 기본값일 때만 routing_provider / routing_config 를
@@ -238,27 +242,39 @@ def build_query_graph(deps: QueryGraphDeps) -> Any:
     if deps.router_node is manage_router:
         builder.add_node(
             "router",
-            partial(
-                manage_router,
-                provider=deps.routing_provider,
-                routing_config=deps.routing_config,
+            traced_callable(
+                "rag.router",
+                partial(
+                    manage_router,
+                    provider=deps.routing_provider,
+                    routing_config=deps.routing_config,
+                ),
             ),
         )
     else:
-        builder.add_node("router", deps.router_node)
+        builder.add_node("router", traced_callable("rag.router", deps.router_node))
     builder.add_node(
         "hybrid_search",
-        partial(
-            hybrid_search,
-            dense_embedder=deps.dense_embedder,
-            sparse_embedder=deps.sparse_embedder,
-            store=deps.store,
+        traced_callable(
+            "rag.hybrid_search",
+            partial(
+                hybrid_search,
+                dense_embedder=deps.dense_embedder,
+                sparse_embedder=deps.sparse_embedder,
+                store=deps.store,
+            ),
         ),
     )
-    builder.add_node("empty_retrieval", empty_retrieval_node)
+    builder.add_node(
+        "empty_retrieval",
+        traced_callable("rag.empty_retrieval", empty_retrieval_node),
+    )
     builder.add_node(
         "rerank",
-        partial(cross_encoder_rerank, reranker=deps.reranker, chunk_lookup=deps.chunk_lookup),
+        traced_callable(
+            "rag.rerank",
+            partial(cross_encoder_rerank, reranker=deps.reranker, chunk_lookup=deps.chunk_lookup),
+        ),
     )
     # 생성기 노드는 manage_generator 기본값일 때만 generator_provider / generator_config
     # 를 functools.partial 로 주입한다. 외부에서 주입된 사용자 정의 generator_node 는
@@ -266,19 +282,25 @@ def build_query_graph(deps: QueryGraphDeps) -> Any:
     if deps.generator_node is manage_generator:
         builder.add_node(
             "generate",
-            partial(
-                manage_generator,
-                provider=deps.generator_provider,
-                generation_config=deps.generator_config,
+            traced_callable(
+                "rag.generate",
+                partial(
+                    manage_generator,
+                    provider=deps.generator_provider,
+                    generation_config=deps.generator_config,
+                ),
             ),
         )
     else:
-        builder.add_node("generate", deps.generator_node)
+        builder.add_node("generate", traced_callable("rag.generate", deps.generator_node))
     # 검증 2단계 평가자 — provider/config/full_context 주입은 resolve_verify_llm_evaluator
     # 가 단일 지점에서 해석한다(스트리밍 라우트의 사후 검증과 동일 callable 공유).
     builder.add_node(
         "verify",
-        partial(verify_pipeline_node, llm_evaluator=resolve_verify_llm_evaluator(deps)),
+        traced_callable(
+            "rag.verify",
+            partial(verify_pipeline_node, llm_evaluator=resolve_verify_llm_evaluator(deps)),
+        ),
     )
 
     # 엣지 — 단일 경로 + 검색 0건 분기.
@@ -328,36 +350,51 @@ def build_query_graph_for_streaming(deps: QueryGraphDeps) -> Any:
     # 노드 등록 — build_query_graph 와 동일 wiring. partial 패턴 정합.
     builder.add_node(
         "manage_history",
-        partial(
-            manage_history,
-            provider=deps.history_provider,
-            history_config=deps.history_config,
+        traced_callable(
+            "rag.manage_history",
+            partial(
+                manage_history,
+                provider=deps.history_provider,
+                history_config=deps.history_config,
+            ),
         ),
     )
     if deps.router_node is manage_router:
         builder.add_node(
             "router",
-            partial(
-                manage_router,
-                provider=deps.routing_provider,
-                routing_config=deps.routing_config,
+            traced_callable(
+                "rag.router",
+                partial(
+                    manage_router,
+                    provider=deps.routing_provider,
+                    routing_config=deps.routing_config,
+                ),
             ),
         )
     else:
-        builder.add_node("router", deps.router_node)
+        builder.add_node("router", traced_callable("rag.router", deps.router_node))
     builder.add_node(
         "hybrid_search",
-        partial(
-            hybrid_search,
-            dense_embedder=deps.dense_embedder,
-            sparse_embedder=deps.sparse_embedder,
-            store=deps.store,
+        traced_callable(
+            "rag.hybrid_search",
+            partial(
+                hybrid_search,
+                dense_embedder=deps.dense_embedder,
+                sparse_embedder=deps.sparse_embedder,
+                store=deps.store,
+            ),
         ),
     )
-    builder.add_node("empty_retrieval", empty_retrieval_node)
+    builder.add_node(
+        "empty_retrieval",
+        traced_callable("rag.empty_retrieval", empty_retrieval_node),
+    )
     builder.add_node(
         "rerank",
-        partial(cross_encoder_rerank, reranker=deps.reranker, chunk_lookup=deps.chunk_lookup),
+        traced_callable(
+            "rag.rerank",
+            partial(cross_encoder_rerank, reranker=deps.reranker, chunk_lookup=deps.chunk_lookup),
+        ),
     )
 
     # 엣지 — 단일 경로 + 검색 0건 분기 (generate/verify 미포함).

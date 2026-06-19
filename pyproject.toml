@@ -33,6 +33,13 @@ dependencies = [
     # 일부를 HTTP 표준 메트릭으로 충당한다. LLM 커스텀 메트릭(환각 비율·Precision@3 등)
     # 은 feature17(평가 세션) 으로 이관.
     "prometheus-fastapi-instrumentator>=7.0,<8",
+    "opentelemetry-api>=1.29,<2",
+    "opentelemetry-sdk>=1.29,<2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.29,<2",
+    "opentelemetry-instrumentation-fastapi>=0.50b0,<1",
+    "opentelemetry-instrumentation-httpx>=0.50b0,<1",
+    "opentelemetry-instrumentation-pymongo>=0.50b0,<1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.50b0,<1",
     "sentence-transformers>=3.0",  # 운영 모드 필수 의존성
 ]
 

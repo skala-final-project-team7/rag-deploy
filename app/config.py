@@ -135,6 +135,16 @@ class Settings(BaseSettings):
     # 다운로드(약 2.4 GB)와 Qdrant 서버 접속을 요구하므로 명시 활성화한다.
     use_real_adapters: bool = False
 
+    # --- OpenTelemetry tracing ---
+    # 기본 False — 로컬/테스트에서 endpoint 미설정으로 exporter 경고가 쌓이지 않게 한다.
+    # 운영 배포는 rag-config 의 RAG_OTEL_ENABLED=true + OTEL_EXPORTER_OTLP_ENDPOINT 로 활성화.
+    otel_enabled: bool = False
+    otel_service_name: str = "rag-deploy"
+    otel_exporter_otlp_endpoint: str = (
+        "http://otel-collector.skala3-finalproj-class2-team7.svc.cluster.local:4317"
+    )
+    otel_environment: str = "dev"
+
 
 @lru_cache
 def get_settings() -> Settings:
