@@ -257,7 +257,9 @@ jobs:
               --build-arg "INSTALL_EXTRAS=${INPUT_INSTALL_EXTRAS}"
               --build-arg "RAG_USE_REAL_ADAPTERS=${INPUT_RAG_USE_REAL_ADAPTERS}"
               --cache-from "type=gha,scope=${CACHE_SCOPE}"
-              --cache-to "type=gha,mode=max,scope=${CACHE_SCOPE}"
+              --cache-from "type=registry,ref=${IMAGE_NAME}:buildcache"
+              --cache-to "type=gha,mode=min,scope=${CACHE_SCOPE},ignore-error=true"
+              --cache-to "type=registry,ref=${IMAGE_NAME}:buildcache,mode=max"
               "${TAG_ARGS[@]}"
             )
             if [ -n "${TARGET}" ]; then
