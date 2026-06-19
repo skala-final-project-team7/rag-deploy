@@ -332,17 +332,17 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${MANIFEST_VALUES_FILE}"
+          git -C manifest-repo config user.name "github-actions[bot]"
+          git -C manifest-repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C manifest-repo add "${MANIFEST_VALUES_FILE}"
 
-          if git diff --cached --quiet; then
+          if git -C manifest-repo diff --cached --quiet; then
             echo "No manifest changes staged."
             exit 0
           fi
 
-          git commit -m "Update image tags to ${IMAGE_TAG_SHA}"
-          git push origin "${MANIFEST_REPO_BRANCH}"
+          git -C manifest-repo commit -m "Update image tags to ${IMAGE_TAG_SHA}"
+          git -C manifest-repo push origin "${MANIFEST_REPO_BRANCH}"
         env:
           MANIFEST_IMAGES: ${{ steps.push-images.outputs.images }}
 
